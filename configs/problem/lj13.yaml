@@ -1,0 +1,14 @@
+# @package _global_
+
+dim: 39
+n_particles: 13
+spatial_dim: 3
+
+energy:
+  _target_: adjoint_samplers.energies.lennard_jones_energy.LennardJonesEnergy
+  dim: ${dim}
+  n_particles: ${n_particles}
+
+evaluator:
+  _target_: adjoint_samplers.components.evaluator.SyntheticEenergyEvaluator
+  ref_samples_path: data/test_split_LJ13-1000.npy

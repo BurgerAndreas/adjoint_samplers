@@ -1,0 +1,14 @@
+# @package _global_
+
+dim: 8
+n_particles: 4
+spatial_dim: 2
+
+energy:
+  _target_: adjoint_samplers.energies.double_well_energy.DoubleWellEnergy
+  dim: ${dim}
+  n_particles: ${n_particles}
+
+evaluator:
+  _target_: adjoint_samplers.components.evaluator.SyntheticEenergyEvaluator
+  ref_samples_path: data/test_split_DW4.npy

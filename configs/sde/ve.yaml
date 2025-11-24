@@ -1,0 +1,3 @@
+_target_: adjoint_samplers.components.sde.VESDE
+sigma_max: ${sigma_max}
+sigma_min: ${sigma_min}

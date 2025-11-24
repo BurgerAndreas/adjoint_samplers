@@ -1,0 +1,40 @@
+name: adjoint_samplers
+channels:
+  - pytorch
+  - conda-forge
+  - nvidia
+dependencies:
+  - python=3.11
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pytorch-cuda
+  - matplotlib=3.8 # ghliu: FAIR Chem plotting
+  - jupyter
+  - numpy
+  - rdkit
+  - openmm
+  - openmmtools
+  - pip
+  - pip:
+    - submitit
+    - pre-commit
+    - black==22.6.0
+    - usort==1.0.4
+    - ufmt==2.3.0
+    - flake8==7.0.0
+    - ipykernel
+    - scikit-learn
+    - hydra-core
+    - hydra-submitit-launcher
+    - mace-torch==0.3.8
+    - torch_geometric
+    - torchquad==0.4.0
+    - wandb
+    - POT
+    - einops
+    - git+https://github.com/atong01/bgflow
+    - mdtraj
+    - ipdb
+    - termcolor
+    - ipykernel # notebook@vscode

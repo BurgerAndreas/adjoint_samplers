@@ -1,0 +1,41 @@
+# @package _global_
+
+defaults:
+  - /problem: demo
+  - /source: gauss
+  - /sde@ref_sde: brownian_motion
+  - /model@controller: fouriermlp
+  - /state_cost: zero
+  - /term_cost: score_term_cost
+  - /matcher@adjoint_matcher: adjoint_ve
+
+exp_name: demo_nonmemoryless_soc
+
+# === source ===
+scale: 1
+
+
+# === sde ===
+nfe: 200
+rescale_t: null # quad, cosine
+sigma: 0.3
+
+
+# === training ===
+num_epochs: 6000
+
+max_grad_E_norm: null
+
+adjoint_matcher:
+  buffer_size: 10000
+  duplicates: 10
+  resample_size: 512
+  num_epochs_per_stage: ${num_epochs} # Ensure always adjoint matching
+  optim:
+    lr: 1e-3
+    weight_decay: 1e-7
+
+
+# === eval & logging ===
+use_wandb: false
+eval_freq: 100

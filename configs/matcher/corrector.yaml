@@ -1,0 +1,5 @@
+_target_: adjoint_samplers.components.matcher.CorrectorMatcher
+
+buffer:
+  _target_: adjoint_samplers.components.buffer.BatchBuffer
+  buffer_size: ${adjoint_matcher.buffer_size}

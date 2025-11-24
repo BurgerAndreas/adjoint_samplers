@@ -1,0 +1,3 @@
+_target_: adjoint_samplers.utils.dist_utils.Gauss
+dim: ${dim}
+scale: ${scale}

@@ -1,0 +1,1 @@
+_target_: adjoint_samplers.components.state_cost.ZeroGradStateCost

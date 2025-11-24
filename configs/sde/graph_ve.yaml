@@ -1,0 +1,5 @@
+_target_: adjoint_samplers.components.sde.GraphVESDE
+n_particles: ${n_particles}
+spatial_dim: ${spatial_dim}
+sigma_max: ${sigma_max}
+sigma_min: ${sigma_min}

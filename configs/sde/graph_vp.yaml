@@ -1,0 +1,4 @@
+_target_: adjoint_samplers.components.sde.GraphVPSDE
+n_particles: ${n_particles}
+spatial_dim: ${spatial_dim}
+sigma: ${sigma}

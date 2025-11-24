@@ -1,0 +1,4 @@
+_target_: adjoint_samplers.utils.dist_utils.CenteredParticlesHarmonic
+n_particles: ${n_particles}
+spatial_dim: ${spatial_dim}
+scale: ${scale}

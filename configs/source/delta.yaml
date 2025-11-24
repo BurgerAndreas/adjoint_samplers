@@ -1,0 +1,2 @@
+_target_: adjoint_samplers.utils.dist_utils.Delta
+dim: ${dim}

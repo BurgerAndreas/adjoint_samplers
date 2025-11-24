@@ -1,0 +1,26 @@
+defaults:
+  - _self_
+  - experiment: demo_asbs
+  - lancher: demo_slurm
+
+project: adjoint_sampler
+train_itr_per_epoch: 100
+init_stage: adjoint
+
+seed: 0
+
+clip_grad_norm: false
+checkpoint: null
+save_freq: 100
+
+timesteps:
+  t0: 0.0
+  t1: 1.0
+  steps: ${nfe}
+  rescale_t: ${rescale_t}
+
+# === hardward related  ===
+resample_batch_size: 512
+train_batch_size: 512
+eval_batch_size: 2000
+num_eval_samples: ${eval_batch_size}

@@ -1,0 +1,2 @@
+_target_: adjoint_samplers.components.sde.VPSDE
+sigma: ${scale}
