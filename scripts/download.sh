@@ -16,3 +16,5 @@ for NPY in "${NPYS[@]}"; do
 done
 
 echo "Files downloaded to $DEST_DIR"
+
+du -sh ./data/*

@@ -1,0 +1,17 @@
+ # @package _global_
+ defaults:
+   - override /hydra/launcher: submitit_local
+
+ shared_dir: ./results/local
+ hydra:
+   run:
+     dir: ./results/local/${now:%Y.%m.%d}/${now:%H%M%S}
+   sweep:
+     dir: ./results/local/${now:%Y.%m.%d}/${now:%H%M%S}
+     subdir: ${hydra.job.num}
+   launcher:
+     timeout_min: 0
+     gpus_per_node: 1
+     tasks_per_node: ${hydra.launcher.gpus_per_node}
+     cpus_per_task: 4
+     nodes: 1

@@ -14,7 +14,7 @@
 source .env
 
 # activate venv
-source ${PYTHONBIN}/activate
+source .venv/bin/activate
 
 #module load cuda/12.6
 #module load gcc/12.3

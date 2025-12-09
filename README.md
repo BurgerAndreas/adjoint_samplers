@@ -45,7 +45,7 @@ Run [`scripts/demo.sh`](https://github.com/facebookresearch/adjoint_samplers/blo
 ![](./assets/demo.png)
 
 ## Training DW and LJ energies
-Run the following script to download the necessary reference samples to the folder `data` for evaluation purposes:
+Run the following script to download the necessary reference .npy test splits for the synthetic energies into ./data (DW4, LJ13, LJ55) from the DEM GitHub repo for evaluation purposes:
 ```
 bash scripts/download.sh
 ```
