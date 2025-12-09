@@ -10,11 +10,13 @@ from pathlib import Path
 
 import torch
 import torch.backends.cudnn as cudnn
+import matplotlib.pyplot as plt
 
 from adjoint_samplers.components.sde import ControlledSDE, sdeint
 from adjoint_samplers.train_loop import train_one_epoch
 import adjoint_samplers.utils.train_utils as train_utils
 import adjoint_samplers.utils.distributed_mode as distributed_mode
+from adjoint_samplers.utils.eval_utils import interatomic_dist, fig2img
 
 
 cudnn.benchmark = True
@@ -214,6 +216,55 @@ def main(cfg):
                         )
 
                     samples = torch.cat(x1_list, dim=0)
+
+                    # Plot histograms for energy and interatomic distances
+                    print("Plotting energy and distance histograms...")
+                    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+
+                    # Energy histogram
+                    energy_values = energy.eval(samples).detach().cpu().numpy()
+                    axes[0].hist(energy_values, bins=50, density=True)
+                    axes[0].set_xlabel("Energy")
+                    axes[0].set_ylabel("Density")
+                    axes[0].set_title(f"Energy Distribution (epoch {epoch})")
+                    axes[0].grid(True)
+
+                    # Interatomic distance histogram (if applicable)
+                    if hasattr(energy, "n_particles") and hasattr(
+                        energy, "n_spatial_dim"
+                    ):
+                        distances = (
+                            interatomic_dist(
+                                samples, energy.n_particles, energy.n_spatial_dim
+                            )
+                            .detach()
+                            .cpu()
+                            .numpy()
+                            .reshape(-1)
+                        )
+                        axes[1].hist(distances, bins=50, density=True)
+                        axes[1].set_xlabel("Interatomic Distance")
+                        axes[1].set_ylabel("Density")
+                        axes[1].set_title(
+                            f"Interatomic Distance Distribution (epoch {epoch})"
+                        )
+                        axes[1].grid(True)
+                    else:
+                        axes[1].text(
+                            0.5,
+                            0.5,
+                            "N/A\n(Not a particle system)",
+                            ha="center",
+                            va="center",
+                            transform=axes[1].transAxes,
+                        )
+                        axes[1].set_title("Interatomic Distance Distribution")
+
+                    plt.tight_layout()
+                    hist_img = fig2img(fig)
+                    plt.close(fig)
+                    hist_img.save(eval_dir / f"energy_dist_hist_epoch_{epoch}.png")
+
                     eval_dict = evaluator(samples)
                     print(f"Evaluated @{epoch=}!")
 
