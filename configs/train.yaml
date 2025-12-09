@@ -24,3 +24,23 @@ resample_batch_size: 512
 train_batch_size: 512
 eval_batch_size: 2000
 num_eval_samples: ${eval_batch_size}
+
+# === paths  ===
+# dataset:
+#   datapath: /project/aip-aspuru/aburger/Transition1x/data/transition1x.h5
+
+# energy:
+#   model_ckpt: /project/aip-aspuru/aburger/hip/ckpt/hip_v2.ckpt
+
+# dataset:
+#   datapath: /ssd/Code/Datastore/transition1x.h5
+
+# energy:
+#   model_ckpt: /ssd/Code/hip/ckpt/hip_v2.ckpt
+
+# === logging  ===
+use_wandb: True
+slurm_job_id: null
+
+# Stores the command line arguments overrides
+override_dirname: ${hydra:job.override_dirname}

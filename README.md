@@ -15,11 +15,28 @@ For improved ASBS with chemically-sounded exploration (WT-ASBS), please check [h
 
 
 ## Installation
-Both [Anaconda](https://www.anaconda.com/products/individual) and [micromamba](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html#automatic-install) should work. We recommend [micromamba](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html#automatic-install) for its faster compiling.
 
 ```
-micromamba env create -f environment.yml
-micromamba activate adjoint_samplers
+uv venv .venv --python 3.11
+source .venv/bin/activate
+
+uv pip install torch==2.7.0 --index-url https://download.pytorch.org/whl/cu126
+uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.7.0+cu126.html
+uv pip install torch-cluster -f https://data.pyg.org/whl/torch-2.7.0+cu126.html
+uv pip install torch-geometric
+
+uv pip install -r requirements.txt # --no-cache 
+```
+
+## Run overview
+
+```bash
+uv run train.py experiment=dw4_asbs
+uv run train.py experiment=dw4_as 
+uv run train.py experiment=lj13_asbs 
+uv run train.py experiment=lj13_as 
+uv run train.py experiment=lj55_asbs 
+uv run train.py experiment=lj55_as 
 ```
 
 ## Demo
