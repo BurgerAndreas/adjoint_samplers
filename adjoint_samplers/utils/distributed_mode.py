@@ -69,7 +69,6 @@ def get_init_file(shared_dir: str):
 
 
 def init_distributed_mode(cfg):
-
     with open_dict(cfg):
         # note:
         # world_size: total number of gpus summed over all nodes

@@ -18,9 +18,7 @@ def fig2img(fig):
     """Convert a Matplotlib figure to a PIL Image and return it"""
     # https://stackoverflow.com/a/61756899
     return PIL.Image.frombytes(
-        'RGB',
-        fig.canvas.get_width_height(),
-        fig.canvas.tostring_rgb()
+        "RGB", fig.canvas.get_width_height(), fig.canvas.tostring_rgb()
     )
 
 

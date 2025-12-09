@@ -41,7 +41,7 @@ class MultiDoubleWellPotential(bgflowEnergy):
         dists = compute_distances(x, self._n_particles, self._spatial_dim)
         dists = dists - self._offset
 
-        energies = self._a * dists ** 4 + self._b * dists ** 2 + self._c
+        energies = self._a * dists**4 + self._b * dists**2 + self._c
         return energies.sum(-1, keepdim=True)
 
 
@@ -100,9 +100,15 @@ def compute_distances(x, n_particles, spatial_dim, remove_duplicates=True):
     """
     x = x.reshape(-1, n_particles, spatial_dim)
     # distances = torch.cdist(x, x)
-    diff = x[:,:,None,:] - x[:,None,:,:]  # Shape: (batch, n_particles, n_particles, spatial_dim)
-    distances = torch.sqrt(torch.sum(diff**2, axis=-1) + 1e-8)  # Shape: (batch, n_particles, n_particles)
+    diff = (
+        x[:, :, None, :] - x[:, None, :, :]
+    )  # Shape: (batch, n_particles, n_particles, spatial_dim)
+    distances = torch.sqrt(
+        torch.sum(diff**2, axis=-1) + 1e-8
+    )  # Shape: (batch, n_particles, n_particles)
     if remove_duplicates:
-        distances = distances[:, torch.triu(torch.ones((n_particles, n_particles)), diagonal=1) == 1]
+        distances = distances[
+            :, torch.triu(torch.ones((n_particles, n_particles)), diagonal=1) == 1
+        ]
         distances = distances.reshape(-1, n_particles * (n_particles - 1) // 2)
     return distances

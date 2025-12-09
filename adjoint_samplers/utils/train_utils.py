@@ -21,9 +21,7 @@ def setup(cfg):
     for i in range(torch.cuda.device_count()):
         props = torch.cuda.get_device_properties(i)
         print(
-            "{} \t Memory: {:.2f}GB".format(
-                props.name, props.total_memory / (1024**3)
-            )
+            "{} \t Memory: {:.2f}GB".format(props.name, props.total_memory / (1024**3))
         )
     print(dict(os.environ))
     print("job dir: {}".format(os.path.dirname(os.path.realpath(__file__))))
@@ -44,7 +42,7 @@ def get_timesteps(
     t1: torch.Tensor | float,
     dt: torch.Tensor | float | None = None,
     steps: int | None = None,
-    rescale_t: str | None = None
+    rescale_t: str | None = None,
 ) -> torch.Tensor:
     if (steps is None) is (dt is None):
         raise ValueError("Exactly one of `dt` and `steps` should be defined.")
@@ -53,9 +51,7 @@ def get_timesteps(
     if rescale_t is None:
         return torch.linspace(t0, t1, steps=steps)
     elif rescale_t == "quad":
-        return torch.sqrt(
-            torch.linspace(t0, t1.square(), steps=steps)
-        ).clip(max=t1)
+        return torch.sqrt(torch.linspace(t0, t1.square(), steps=steps)).clip(max=t1)
     elif rescale_t == "cosine":
         """
         from https://github.com/franciscovargas/denoising_diffusion_samplers/blob/main/dds/discretisation_schemes.py
@@ -69,9 +65,7 @@ def get_timesteps(
         dts /= dts.sum()
         dts *= t1  # We normalise s.t. \sum_k \beta_k = T (where beta_k = b_m*cos^4)
 
-        dts_out = torch.concat(
-            (torch.tensor([t0]), torch.cumsum(dts, -1))
-        )
+        dts_out = torch.concat((torch.tensor([t0]), torch.cumsum(dts, -1)))
 
         return dts_out
     raise ValueError("Unkown timestep rescaling method.")
@@ -142,6 +136,7 @@ def save(
             return module.module.state_dict()
         else:
             return module.state_dict()
+
     state["controller"] = get_state_dict(controller)
     if corrector is not None:
         state["corrector"] = get_state_dict(corrector)
@@ -157,7 +152,7 @@ def save(
 
 
 def load(
-    checkpoint: dict[str: Any],
+    checkpoint: dict[str:Any],
     optimizer: Optimizer,
     controller: torch.nn.Module,
     adjoint_matcher: Matcher,
@@ -183,7 +178,7 @@ class Writer:
     def __init__(self, name: str, cfg: DictConfig, is_main_process: bool):
         if cfg.use_wandb and is_main_process:
             self.writer = wandb.init(
-                mode='online',
+                mode="online",
                 project=cfg.project,
                 name=name,
                 config=dict(cfg),

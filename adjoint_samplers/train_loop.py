@@ -35,7 +35,11 @@ def train_one_epoch(
     is_asbs_init_stage = train_utils.is_asbs_init_stage(epoch, cfg)
 
     for _ in range(M):
-        x0 = source.sample([B,]).to(device)
+        x0 = source.sample(
+            [
+                B,
+            ]
+        ).to(device)
         timesteps = train_utils.get_timesteps(**cfg.timesteps).to(device)
         matcher.populate_buffer(x0, timesteps, is_asbs_init_stage)
 
@@ -53,7 +57,7 @@ def train_one_epoch(
         input, target = matcher.prepare_target(data, device)
         output = model(*input)
 
-        loss = loss_scale * ((output - target)**2).mean()
+        loss = loss_scale * ((output - target) ** 2).mean()
         loss.backward()
 
         if cfg.clip_grad_norm:

@@ -14,6 +14,7 @@ from adjoint_samplers.utils.graph_utils import remove_mean
 ######### FourierMLP #########
 ##############################
 
+
 def zero_module(module):
     for p in module.parameters():
         p.detach().zero_()
@@ -139,6 +140,7 @@ class FourierMLP(Model):
 ############################################################################################
 #### EGNN: from https://github.com/jarridrb/DEM/blob/main/dem/models/components/egnn.py ####
 ############################################################################################
+
 
 class EGNN_dynamics(nn.Module):
     def __init__(
@@ -382,7 +384,9 @@ class E_GCL(nn.Module):
             out = x + out
         return out, agg
 
-    def coord_model(self, coord, edge_index, coord_diff, radial, edge_feat, node_mask, edge_mask):
+    def coord_model(
+        self, coord, edge_index, coord_diff, radial, edge_feat, node_mask, edge_mask
+    ):
         # print("coord_model", coord_diff, radial, edge_feat)
         row, col = edge_index
         if self.tanh:
@@ -399,7 +403,9 @@ class E_GCL(nn.Module):
             if node_mask is not None:
                 # raise Exception('This part must be debugged before use')
                 agg = unsorted_segment_sum(trans, row, num_segments=coord.size(0))
-                M = unsorted_segment_sum(node_mask[col], row, num_segments=coord.size(0))
+                M = unsorted_segment_sum(
+                    node_mask[col], row, num_segments=coord.size(0)
+                )
                 agg = agg / (M - 1)
             else:
                 agg = unsorted_segment_mean(trans, row, num_segments=coord.size(0))

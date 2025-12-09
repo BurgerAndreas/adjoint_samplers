@@ -20,17 +20,32 @@ import adjoint_samplers.utils.distributed_mode as distributed_mode
 cudnn.benchmark = True
 
 
-def red(content): return termcolor.colored(str(content),"red",attrs=["bold"])
-def green(content): return termcolor.colored(str(content),"green",attrs=["bold"])
-def blue(content): return termcolor.colored(str(content),"blue",attrs=["bold"])
-def cyan(content): return termcolor.colored(str(content),"cyan",attrs=["bold"])
-def yellow(content): return termcolor.colored(str(content),"yellow",attrs=["bold"])
-def magenta(content): return termcolor.colored(str(content),"magenta",attrs=["bold"])
+def red(content):
+    return termcolor.colored(str(content), "red", attrs=["bold"])
+
+
+def green(content):
+    return termcolor.colored(str(content), "green", attrs=["bold"])
+
+
+def blue(content):
+    return termcolor.colored(str(content), "blue", attrs=["bold"])
+
+
+def cyan(content):
+    return termcolor.colored(str(content), "cyan", attrs=["bold"])
+
+
+def yellow(content):
+    return termcolor.colored(str(content), "yellow", attrs=["bold"])
+
+
+def magenta(content):
+    return termcolor.colored(str(content), "magenta", attrs=["bold"])
 
 
 @hydra.main(config_path="configs", config_name="train.yaml", version_base="1.1")
 def main(cfg):
-
     try:
         train_utils.setup(cfg)
         print(str(cfg))
@@ -45,24 +60,20 @@ def main(cfg):
         print("Instantiating energy...")
         energy = hydra.utils.instantiate(cfg.energy, device=device)
 
-
         print("Instantiating source...")
         source = hydra.utils.instantiate(cfg.source, device=device)
 
-
-        print('Instantiating model...')
+        print("Instantiating model...")
         ref_sde = hydra.utils.instantiate(cfg.ref_sde).to(device)
         controller = hydra.utils.instantiate(cfg.controller).to(device)
         sde = ControlledSDE(ref_sde, controller).to(device)
 
-
         if "corrector" in cfg:
-            print('Instantiating corrector & corrector matcher...')
+            print("Instantiating corrector & corrector matcher...")
             corrector = hydra.utils.instantiate(cfg.corrector).to(device)
             corrector_matcher = hydra.utils.instantiate(cfg.corrector_matcher, sde=sde)
         else:
             corrector = corrector_matcher = None
-
 
         print("Instantiating grad of costs...")
         grad_term_cost = hydra.utils.instantiate(
@@ -73,7 +84,6 @@ def main(cfg):
             source=source,
         )
 
-
         print("Instantiating adjoint matcher...")
         adjoint_matcher = hydra.utils.instantiate(
             cfg.adjoint_matcher,
@@ -81,19 +91,20 @@ def main(cfg):
             sde=sde,
         )
 
-
         print("Instantiating optimizer...")
-        lr_schedule = None # TODO(ghliu) add scheduler
+        lr_schedule = None  # TODO(ghliu) add scheduler
         if corrector is not None:
-            optimizer = torch.optim.Adam([
-                {'params': controller.parameters(), **cfg.adjoint_matcher.optim},
-                {'params': corrector.parameters(), **cfg.corrector_matcher.optim},
-            ])
+            optimizer = torch.optim.Adam(
+                [
+                    {"params": controller.parameters(), **cfg.adjoint_matcher.optim},
+                    {"params": corrector.parameters(), **cfg.corrector_matcher.optim},
+                ]
+            )
         else:
             optimizer = torch.optim.Adam(
-                controller.parameters(), **cfg.adjoint_matcher.optim,
+                controller.parameters(),
+                **cfg.adjoint_matcher.optim,
             )
-
 
         checkpoint_path = Path(cfg.checkpoint or "checkpoints/checkpoint_latest.pt")
         checkpoint_path.parent.mkdir(exist_ok=True)
@@ -112,7 +123,6 @@ def main(cfg):
         else:
             start_epoch = 0
 
-
         if cfg.distributed:
             controller = torch.nn.parallel.DistributedDataParallel(
                 controller, device_ids=[cfg.gpu], find_unused_parameters=True
@@ -122,7 +132,6 @@ def main(cfg):
                     corrector, device_ids=[cfg.gpu], find_unused_parameters=True
                 )
 
-
         print("Instantiating writer...")
         writer = train_utils.Writer(
             name=cfg.exp_name,
@@ -130,12 +139,10 @@ def main(cfg):
             is_main_process=distributed_mode.is_main_process(),
         )
 
-
         print("Instantiating evaluator...")
         eval_dir = Path("eval_figs")
         eval_dir.mkdir(exist_ok=True)
         evaluator = hydra.utils.instantiate(cfg.evaluator, energy=energy)
-
 
         print(f"Starting from {start_epoch}/{cfg.num_epochs} epochs...")
         for epoch in range(start_epoch, cfg.num_epochs):
@@ -147,26 +154,24 @@ def main(cfg):
             }.get(stage)
 
             loss = train_one_epoch(
-                matcher,
-                model,
-                source,
-                optimizer,
-                lr_schedule,
-                epoch,
-                device,
-                cfg
+                matcher, model, source, optimizer, lr_schedule, epoch, device, cfg
             )
 
-            writer.log({
-                f"{stage}_loss": loss,
-                f"{stage}_buffer_size": len(matcher.buffer),
-            }, step=epoch)
+            writer.log(
+                {
+                    f"{stage}_loss": loss,
+                    f"{stage}_buffer_size": len(matcher.buffer),
+                },
+                step=epoch,
+            )
 
-            print("[{0} | {1}] {2}".format(
-                cyan(  f"{stage:<7}"),
-                yellow(f"ep={epoch:04}"),
-                green( f"loss={loss:.4f}"),
-            ))
+            print(
+                "[{0} | {1}] {2}".format(
+                    cyan(f"{stage:<7}"),
+                    yellow(f"ep={epoch:04}"),
+                    green(f"loss={loss:.4f}"),
+                )
+            )
 
             # Eval epoch according to the frequency
             # otherwise eval at the end of adjoint matching
@@ -181,8 +186,14 @@ def main(cfg):
                     n_gen_samples = 0
                     x1_list = []
                     while n_gen_samples < cfg.num_eval_samples:
-                        B = min(cfg.eval_batch_size, cfg.num_eval_samples - n_gen_samples)
-                        x0 = source.sample([B,]).to(device)
+                        B = min(
+                            cfg.eval_batch_size, cfg.num_eval_samples - n_gen_samples
+                        )
+                        x0 = source.sample(
+                            [
+                                B,
+                            ]
+                        ).to(device)
                         timesteps = train_utils.get_timesteps(**cfg.timesteps).to(x0)
 
                         # model samples
@@ -194,11 +205,13 @@ def main(cfg):
                         )
                         x1_list.append(x1)
                         n_gen_samples += x1.shape[0]
-                        print("Generated {} samples (total: {}/{})".format(
-                            x1.shape[0],
-                            n_gen_samples,
-                            cfg.num_eval_samples,
-                        ))
+                        print(
+                            "Generated {} samples (total: {}/{})".format(
+                                x1.shape[0],
+                                n_gen_samples,
+                                cfg.num_eval_samples,
+                            )
+                        )
 
                     samples = torch.cat(x1_list, dim=0)
                     eval_dict = evaluator(samples)

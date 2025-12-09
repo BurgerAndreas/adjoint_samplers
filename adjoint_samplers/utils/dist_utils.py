@@ -9,9 +9,10 @@ from torch import distributions
 ######### Target Distributions #########
 ########################################
 
+
 class GMM1D(distributions.Distribution):
-    """ A simple bi-modal Gaussian mixtures in 1D for demo purposes
-    """
+    """A simple bi-modal Gaussian mixtures in 1D for demo purposes"""
+
     def __init__(self, device="cpu") -> None:
         super().__init__()
 
@@ -21,12 +22,10 @@ class GMM1D(distributions.Distribution):
 
     def _initialize_distr(self, device) -> None:
         loc = torch.tensor([-1, 2], device=device, dtype=torch.float).reshape(2, 1)
-        scale = torch.tensor([.7, .4], device=device, dtype=torch.float).reshape(2, 1)
-        weights = torch.tensor([.5, .5], device=device, dtype=torch.float).reshape(2)
+        scale = torch.tensor([0.7, 0.4], device=device, dtype=torch.float).reshape(2, 1)
+        weights = torch.tensor([0.5, 0.5], device=device, dtype=torch.float).reshape(2)
 
-        modes = distributions.Independent(
-            distributions.Normal(loc, scale), 1
-        )
+        modes = distributions.Independent(distributions.Normal(loc, scale), 1)
         mix = distributions.Categorical(weights)
         self.distr = distributions.MixtureSameFamily(mix, modes)
 
@@ -42,17 +41,15 @@ class GMM1D(distributions.Distribution):
         self._initialize_distr(device)
         return self
 
+
 ########################################
 ######### Source Distributions #########
 ########################################
 
+
 class Gauss(distributions.Distribution):
     def __init__(
-        self,
-        dim,
-        loc: float = 0.0,
-        scale: float = 1.0,
-        device: str ="cpu"
+        self, dim, loc: float = 0.0, scale: float = 1.0, device: str = "cpu"
     ) -> None:
         super().__init__()
 
@@ -80,8 +77,8 @@ class Delta(distributions.Distribution):
 
 
 class CenteredParticlesGauss(distributions.Distribution):
-    """ Sample particles with zero center of mass
-    """
+    """Sample particles with zero center of mass"""
+
     def __init__(
         self,
         n_particles,
@@ -109,10 +106,11 @@ class CenteredParticlesGauss(distributions.Distribution):
 
 
 class CenteredParticlesHarmonic(distributions.Distribution):
-    """ Sample particles with zero center of mass from
-        non-isotropic Gaussian based on a harmonic prior
-        https://arxiv.org/pdf/2304.02198
+    """Sample particles with zero center of mass from
+    non-isotropic Gaussian based on a harmonic prior
+    https://arxiv.org/pdf/2304.02198
     """
+
     def __init__(
         self,
         n_particles,
@@ -134,28 +132,27 @@ class CenteredParticlesHarmonic(distributions.Distribution):
         self.rank, self.A = self._decompose_svd(cov)
 
     def _compute_cov(self, n_particles, spatial_dim):
-        """ e.g., n_particles = 2, spatial_dim = 3 would generate
+        """e.g., n_particles = 2, spatial_dim = 3 would generate
 
-            R = tensor([[  1,   0,   0, -0.5,   0,   0 ],
-                        [  0,   1,   0,   0, -0.5,   0 ],
-                        [  0,   0,   1,   0,    0, -0.5],
-                        [-0.5,  0,   0,   1,    0,   0 ],
-                        [  0, -0.5,   0,  0,    1,   0 ],
-                        [  0,   0, -0.5,  0,    0,   1 ]])
+        R = tensor([[  1,   0,   0, -0.5,   0,   0 ],
+                    [  0,   1,   0,   0, -0.5,   0 ],
+                    [  0,   0,   1,   0,    0, -0.5],
+                    [-0.5,  0,   0,   1,    0,   0 ],
+                    [  0, -0.5,   0,  0,    1,   0 ],
+                    [  0,   0, -0.5,  0,    0,   1 ]])
 
-            Denote x = [a1, a2, a3, b1, b2, b3]. This yields
+        Denote x = [a1, a2, a3, b1, b2, b3]. This yields
 
-            0.5 * x^T R x = a**2 + b**2 - ab = (a - b)**2
+        0.5 * x^T R x = a**2 + b**2 - ab = (a - b)**2
         """
         # TODO(ghliu) assume all particles are connected; otherwise changes A
-        A = - 0.5 * torch.ones(n_particles, n_particles)
-        A[torch.arange(n_particles), torch.arange(n_particles)] = 1.
+        A = -0.5 * torch.ones(n_particles, n_particles)
+        A[torch.arange(n_particles), torch.arange(n_particles)] = 1.0
         B = torch.eye(spatial_dim)
         return torch.kron(A, B).inverse()
 
     def _decompose_svd(self, cov):
-        """ return the rank of cov and A where `cov = UΣV = AA^T`
-        """
+        """return the rank of cov and A where `cov = UΣV = AA^T`"""
         U, S, Vt = torch.svd(cov)
 
         rank = (S > 1e-8).sum()
@@ -163,20 +160,20 @@ class CenteredParticlesHarmonic(distributions.Distribution):
         return rank, A
 
     def sample(self, shape: tuple | None = None) -> torch.Tensor:
-        """ generate samples by
-            1. z ~ N(0,I) in the subspace with dim=rank
-            2. x = Az, hence x ~ N(0, AA^T)
-            3. make x zero COM
+        """generate samples by
+        1. z ~ N(0,I) in the subspace with dim=rank
+        2. x = Az, hence x ~ N(0, AA^T)
+        3. make x zero COM
         """
         if shape is None:
             shape = tuple()
 
-        B = math.prod(shape) # batch
+        B = math.prod(shape)  # batch
         z = torch.randn(B, self.rank, device=self.device)
-        samples = z @ self.A.to(z).T # (B, R) x (R, D) = (B, D)
+        samples = z @ self.A.to(z).T  # (B, R) x (R, D) = (B, D)
         assert samples.shape == (B, self.dim)
 
-        samples = samples * self.scale # note: scale = sqrt(alpha)
+        samples = samples * self.scale  # note: scale = sqrt(alpha)
 
         samples = samples.reshape(*shape, self.n_particles, self.spatial_dim)
         samples = samples - samples.mean(-2, keepdims=True)

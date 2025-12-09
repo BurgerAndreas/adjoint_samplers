@@ -8,7 +8,7 @@ import torch
 class BatchBuffer:
     def __init__(self, buffer_size: int):
         self.buffer_size: int = buffer_size
-        self.batches: Dict[str, List]  = {}
+        self.batches: Dict[str, List] = {}
 
     def add(self, batch: dict):
         # if it is not the first push
@@ -28,8 +28,10 @@ class BatchBuffer:
             data = torch.cat(v)
             # if len(data) > self.buffer_size:
             #     print(f'WARNING: data ({k}) length exceeds maximum buffer size')
-            total_data[k] = data[-self.buffer_size:]
-            self.batches[k] = [total_data[k],] # handle off-policy samples
+            total_data[k] = data[-self.buffer_size :]
+            self.batches[k] = [
+                total_data[k],
+            ]  # handle off-policy samples
         return BufferDataset(total_data, duplicates)
 
     def __len__(self):
@@ -57,7 +59,7 @@ class BufferDataset(torch.utils.data.Dataset):
             assert len(v) == self.len
 
         self.total_data = total_data
-        self.duplicates = duplicates # expand factor
+        self.duplicates = duplicates  # expand factor
 
     def __getitem__(self, idx):
         return {k: v[idx % self.len] for k, v in self.total_data.items()}

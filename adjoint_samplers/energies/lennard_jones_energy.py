@@ -78,10 +78,14 @@ class LennardJonesPotential(bgflowEnergy):
 
         lj_energies = lennard_jones_energy_torch(dists, self._eps, self._rm)
         # lj_energies = torch.clip(lj_energies, -1e4, 1e4)
-        lj_energies = lj_energies.view(*batch_shape, -1).sum(dim=-1) * self._energy_factor
+        lj_energies = (
+            lj_energies.view(*batch_shape, -1).sum(dim=-1) * self._energy_factor
+        )
 
         if self.oscillator:
-            osc_energies = 0.5 * self._remove_mean(x).pow(2).sum(dim=(-2, -1)).view(*batch_shape)
+            osc_energies = 0.5 * self._remove_mean(x).pow(2).sum(dim=(-2, -1)).view(
+                *batch_shape
+            )
             lj_energies = lj_energies + osc_energies * self._oscillator_scale
 
         return lj_energies[:, None]
@@ -125,7 +129,7 @@ class LennardJonesEnergy(BaseEnergy):
         )
 
     def eval(self, samples: torch.Tensor) -> torch.Tensor:
-        return - self.lennard_jones._log_prob(samples).squeeze(-1)
+        return -self.lennard_jones._log_prob(samples).squeeze(-1)
 
     def to(self, device):
         self.lennard_jones.to(device)

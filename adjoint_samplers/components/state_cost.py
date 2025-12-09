@@ -10,6 +10,7 @@ class GradStateCost:
     def __call__(self, t, x):
         raise NotImplementedError()
 
+
 class ZeroGradStateCost(GradStateCost):
     def __init__(self, **kwargs):
         super().__init__()

@@ -5,9 +5,9 @@ import adjoint_samplers.utils.graph_utils as graph_utils
 
 
 class GradEnergy:
-    """ Compute ∇E(X_1)
-    """
-    def __init__(self, energy, max_grad_E_norm = None, **kwargs):
+    """Compute ∇E(X_1)"""
+
+    def __init__(self, energy, max_grad_E_norm=None, **kwargs):
         self.energy = energy
         self.max_grad_E_norm = max_grad_E_norm
 
@@ -31,8 +31,8 @@ class GradEnergy:
 
 # For AS.
 class ScoreGradTermCost(GradEnergy):
-    """ Compute (∇E + ∇log p^base_1)(X_1)
-    """
+    """Compute (∇E + ∇log p^base_1)(X_1)"""
+
     def __init__(self, source, ref_sde, energy, **kwargs):
         super().__init__(energy, **kwargs)
 
@@ -47,6 +47,7 @@ class ScoreGradTermCost(GradEnergy):
 
     def _check_source_class(self, source):
         from adjoint_samplers.utils.dist_utils import Delta, Gauss
+
         assert isinstance(source, (Delta, Gauss))
 
     def __call__(self, x1):
@@ -57,8 +58,8 @@ class ScoreGradTermCost(GradEnergy):
 
 # For ASBS.
 class CorrectorGradTermCost(GradEnergy):
-    """ Compute (∇E + ∇log h)(X_1), where h is the corrector of ASBS.
-    """
+    """Compute (∇E + ∇log h)(X_1), where h is the corrector of ASBS."""
+
     def __init__(self, corrector, energy, **kwargs):
         super().__init__(energy, **kwargs)
         self.corrector = corrector
@@ -91,8 +92,8 @@ class GraphCorrectorGradTermCost(CorrectorGradTermCost):
 
 # For AS on n-particle systems.
 class GraphScoreGradTermCost(ScoreGradTermCost):
-    """ Compute (∇E + ∇log p^base_1)(X_1) for n-particle systems
-    """
+    """Compute (∇E + ∇log p^base_1)(X_1) for n-particle systems"""
+
     def __init__(self, source, ref_sde, energy, **kwargs):
         super().__init__(source, ref_sde, energy, **kwargs)
         self.n_particles = energy.n_particles
@@ -100,6 +101,7 @@ class GraphScoreGradTermCost(ScoreGradTermCost):
 
     def _check_source_class(self, source):
         from adjoint_samplers.utils.dist_utils import Delta, CenteredParticlesGauss
+
         assert isinstance(source, (Delta, CenteredParticlesGauss))
 
     def grad_E(self, x1):

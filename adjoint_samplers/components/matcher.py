@@ -47,7 +47,7 @@ class AdjointMatcher(Matcher):
         self,
         grad_term_cost: GradEnergy | None = None,
         grad_state_cost: GradStateCost | None = None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.grad_term_cost = grad_term_cost
@@ -75,9 +75,7 @@ class AdjointMatcher(Matcher):
                 f = torch.zeros_like(x)
             else:
                 with torch.enable_grad():
-                    f = grad(
-                        lambda x: torch.sum(adjoint * ref_sde.drift(t, x))
-                    )(x)
+                    f = grad(lambda x: torch.sum(adjoint * ref_sde.drift(t, x)))(x)
 
             # Compute gradient of state cost
             f = f + self.grad_state_cost(t, x)
@@ -99,10 +97,10 @@ class AdjointMatcher(Matcher):
         return adjoint1
 
     def populate_buffer(
-            self,
-            x0: torch.Tensor,
-            timesteps: torch.Tensor,
-            is_asbs_init_stage: bool,
+        self,
+        x0: torch.Tensor,
+        timesteps: torch.Tensor,
+        is_asbs_init_stage: bool,
     ):
         (B, D), T = x0.shape, len(timesteps)
         assert x0.device == timesteps.device
@@ -130,11 +128,13 @@ class AdjointMatcher(Matcher):
         assert ts.shape == (B, T, 1)
         assert adjoints.shape == xs.shape == (B, T, D)
 
-        self.buffer.add({
-            "t": ts.reshape(B, T).detach().cpu(),
-            "xt": xs.reshape(B, T * D).detach().cpu(),
-            "adjointt": adjoints.reshape(B, T * D).detach().cpu(),
-        })
+        self.buffer.add(
+            {
+                "t": ts.reshape(B, T).detach().cpu(),
+                "xt": xs.reshape(B, T * D).detach().cpu(),
+                "adjointt": adjoints.reshape(B, T * D).detach().cpu(),
+            }
+        )
 
     def prepare_target(self, data, device):
         t = data["t"].to(device)
@@ -147,18 +147,19 @@ class AdjointMatcher(Matcher):
         # randomly select B index
         # TODO(ghliu) not used for AS / ASBS. Refac this logic.
         idx = torch.randint(high=T, size=(B,))
-        idx = [i*T+id for i, id in enumerate(idx)]
+        idx = [i * T + id for i, id in enumerate(idx)]
 
         t = t.reshape(B * T, 1)[idx]
         xt = xt.reshape(B * T, D)[idx]
         adjointt = adjointt.reshape(B * T, D)[idx]
-        return (t, xt), - adjointt
+        return (t, xt), -adjointt
 
 
 class AdjointVEMatcher(AdjointMatcher):
-    """ Efficient computation of AM when the base SDE has no drift (e.g., VE)
-        and the SOC problem has no state cost.
+    """Efficient computation of AM when the base SDE has no drift (e.g., VE)
+    and the SOC problem has no state cost.
     """
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._check_soc_problem()
@@ -172,10 +173,10 @@ class AdjointVEMatcher(AdjointMatcher):
         assert x1.shape == adjoint1.shape == (B, D)
 
     def populate_buffer(
-            self,
-            x0: torch.Tensor,
-            timesteps: torch.Tensor,
-            is_asbs_init_stage: bool,
+        self,
+        x0: torch.Tensor,
+        timesteps: torch.Tensor,
+        is_asbs_init_stage: bool,
     ):
         (x0, x1) = sdeint(
             self.sde,
@@ -186,11 +187,13 @@ class AdjointVEMatcher(AdjointMatcher):
         adjoint1 = self._compute_adjoint1(x1, is_asbs_init_stage).clone()
 
         self._check_buffer_sample_shape(x0, x1, adjoint1)
-        self.buffer.add({
-            "x0": x0.to("cpu"),
-            "x1": x1.to("cpu"),
-            "adjoint1": adjoint1.to("cpu"),
-        })
+        self.buffer.add(
+            {
+                "x0": x0.to("cpu"),
+                "x1": x1.to("cpu"),
+                "adjoint1": adjoint1.to("cpu"),
+            }
+        )
 
     def sample_t(self, x):
         (B, D) = x.shape
@@ -207,16 +210,17 @@ class AdjointVEMatcher(AdjointMatcher):
 
         t = self.sample_t(x0).to(device)
         xt = self.sde.sample_base_posterior(t, x0, x1)
-        adjoint = adjoint1 # const w.r.t. time in this case
+        adjoint = adjoint1  # const w.r.t. time in this case
 
         self._check_target_shape(t, xt, adjoint)
-        return (t, xt), - adjoint
+        return (t, xt), -adjoint
 
 
 class AdjointVPMatcher(AdjointVEMatcher):
-    """ Efficient computation of AM when the base SDE has linear drift (e.g., VP)
-        and the SOC problem has no state cost.
+    """Efficient computation of AM when the base SDE has linear drift (e.g., VP)
+    and the SOC problem has no state cost.
     """
+
     def _check_soc_problem(self):
         assert self.sde.ref_sde.has_drift
         assert isinstance(self.grad_state_cost, ZeroGradStateCost)
@@ -228,11 +232,11 @@ class AdjointVPMatcher(AdjointVEMatcher):
 
         t = self.sample_t(x0).to(device)
         xt = self.sde.sample_base_posterior(t, x0, x1)
-        adjoint = adjoint1 # const w.r.t. time in this case
+        adjoint = adjoint1  # const w.r.t. time in this case
         adjoint = adjoint * torch.exp(self.sde.ref_sde.coeff2(t))
 
         self._check_target_shape(t, xt, adjoint)
-        return (t, xt), - adjoint
+        return (t, xt), -adjoint
 
 
 class CorrectorMatcher(Matcher):
@@ -244,10 +248,10 @@ class CorrectorMatcher(Matcher):
         assert x1.shape == (B, D)
 
     def populate_buffer(
-            self,
-            x0: torch.Tensor,
-            timesteps: torch.Tensor,
-            is_asbs_init_stage: bool,
+        self,
+        x0: torch.Tensor,
+        timesteps: torch.Tensor,
+        is_asbs_init_stage: bool,
     ):
         # IPF init: First Corrector Matching stage
         # of ASBS uses zero controller (i.e., ref_sde)
@@ -261,10 +265,12 @@ class CorrectorMatcher(Matcher):
         )
 
         self._check_buffer_sample_shape(x0, x1)
-        self.buffer.add({
-            "x0": x0.to("cpu"),
-            "x1": x1.to("cpu"),
-        })
+        self.buffer.add(
+            {
+                "x0": x0.to("cpu"),
+                "x1": x1.to("cpu"),
+            }
+        )
 
     def _check_target_shape(self, t1, x1, score):
         (B, D) = x1.shape
@@ -278,4 +284,7 @@ class CorrectorMatcher(Matcher):
         score = self.sde.ref_sde.cond_score(x0, t1, x1)
 
         self._check_target_shape(t1, x1, score)
-        return (t1, x1,), score
+        return (
+            t1,
+            x1,
+        ), score
