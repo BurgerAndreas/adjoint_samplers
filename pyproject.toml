@@ -1,0 +1,59 @@
+[project]
+name = "adjoint-samplers"
+version = "0.1.0"
+description = "Adjoint-based diffusion samplers for energy-based Boltzmann distributions"
+requires-python = ">=3.11"
+dependencies = [
+    "scikit-learn",
+    "pandas",
+    "ase",
+    "pyscf",
+    "openbabel-wheel",
+    "openmm",
+    "mdtraj",
+    "plotly",
+    "imageio",
+    "seaborn",
+    "matplotlib==3.8",
+    "kaleido",
+    "nglview",
+    "py3Dmol==2.5.0",
+    "rdkit==2025.9.1",
+    "pymol-open-source",
+    "ipdb",
+    "POT",
+    "ruff",
+    "pydantic==2.11.4",
+    "tqdm",
+    "progressbar",
+    "termcolor",
+    "ipykernel",
+    "nbformat",
+    "toml",
+    "omegaconf",
+    "hydra-submitit-launcher",
+    "hydra-core>=1.0,<2.0",
+    "pyyaml",
+    "wandb==0.21.0",
+    "huggingface_hub>=0.27.1",
+    "kagglehub>=0.3.12",
+    "torch",
+    "torch_geometric",
+    "einops",
+    "torchmetrics",
+    "opt-einsum-fx==0.1.4",
+    "e3nn",
+    "mace-torch==0.3.8",
+    "torchquad==0.4.0",
+    "submitit",
+    "joblib==1.5.1",
+    "networkx==3.4.2",
+    "lmdb==1.5.1",
+    "h5py>=3.10.0",
+    "bgflow @ git+https://github.com/atong01/bgflow",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
