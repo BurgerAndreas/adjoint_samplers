@@ -20,6 +20,7 @@ matplotlib==3.8
 kaleido
 nglview
 py3Dmol==2.5.0
+pyppeteer
 rdkit==2025.9.1
 pymol-open-source
 ipdb

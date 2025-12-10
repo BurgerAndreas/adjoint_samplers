@@ -1,10 +1,17 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
-import torch
-from scipy.optimize import linear_sum_assignment
+import asyncio
+import io
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 
+import numpy as np
 import PIL
+import py3Dmol
+import torch
 from matplotlib import pyplot as plt
+from pyppeteer import launch
+from scipy.optimize import linear_sum_assignment
 
 
 def get_fig_axes(ncol, nrow=1, ax_length_in=2.0):
@@ -109,3 +116,65 @@ def interatomic_dist(x, n_particles, n_spatial_dim):
         torch.triu(torch.ones((n_particles, n_particles)), diagonal=1) == 1,
     ]
     return torch.linalg.norm(distances, dim=-1)
+
+
+def build_xyz_from_positions(positions, atom_type="C", center=True):
+    """
+    positions: torch.Tensor or np.ndarray of shape (N, 3)
+    returns XYZ string
+    """
+    pos = positions.detach().cpu().numpy() if torch.is_tensor(positions) else positions
+    if center:
+        pos = pos - pos.mean(axis=0, keepdims=True)
+    lines = [f"{pos.shape[0]}", "generated"]
+    for p in pos:
+        lines.append(f"{atom_type} {p[0]:.6f} {p[1]:.6f} {p[2]:.6f}")
+    return "\n".join(lines)
+
+
+def render_xyz_to_png(xyz_str, width=300, height=300):
+    view = py3Dmol.view(width=width, height=height)
+    view.addModel(xyz_str, "xyz")
+    view.setStyle({"stick": {}})
+    view.zoomTo()
+
+    html = view.write_html()
+
+    async def _html_to_png_bytes():
+        with NamedTemporaryFile(delete=False, suffix=".html") as tmp:
+            tmp_path = Path(tmp.name)
+            tmp.write(html.encode("utf-8"))
+
+        browser = await launch(
+            headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"]
+        )
+        page = await browser.newPage()
+        await page.setViewport({"width": width, "height": height})
+        await page.goto(tmp_path.as_uri(), waitUntil="networkidle0")
+        await page.waitFor(100)
+        png_bytes = await page.screenshot(fullPage=False)
+        await browser.close()
+        tmp_path.unlink(missing_ok=True)
+        return png_bytes
+
+    return asyncio.run(_html_to_png_bytes())
+
+
+def render_xyz_grid(xyz_strings, ncols=3, width=900, height=900):
+    """Render up to ncols*ncols XYZ strings into a grid PNG bytes."""
+    n = len(xyz_strings)
+    n = min(n, ncols * ncols)
+    cell_w = width // ncols
+    cell_h = height // ncols
+
+    imgs = []
+    for i in range(n):
+        png_bytes = render_xyz_to_png(xyz_strings[i], width=cell_w, height=cell_h)
+        imgs.append(PIL.Image.open(io.BytesIO(png_bytes)))
+
+    grid = PIL.Image.new("RGB", (cell_w * ncols, cell_h * ncols), color=(255, 255, 255))
+    for idx, img in enumerate(imgs):
+        r, c = divmod(idx, ncols)
+        grid.paste(img, (c * cell_w, r * cell_h))
+
+    return grid

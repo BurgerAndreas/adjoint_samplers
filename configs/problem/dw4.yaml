@@ -12,3 +12,4 @@ energy:
 evaluator:
   _target_: adjoint_samplers.components.evaluator.SyntheticEenergyEvaluator
   ref_samples_path: data/test_split_DW4.npy
+  do_particles_w2: true

@@ -69,12 +69,12 @@ class DemoEvaluator:
 
 
 class SyntheticEenergyEvaluator:
-    def __init__(self, ref_samples_path, energy) -> None:
+    def __init__(self, ref_samples_path, energy, do_particles_w2=True) -> None:
         assert isinstance(energy, (DoubleWellEnergy, LennardJonesEnergy))
         self.energy = energy
         self.n_particles = energy.n_particles
         self.n_spatial_dim = energy.n_spatial_dim
-
+        self.do_particles_w2 = do_particles_w2
         # Extract reference samples
         root = Path(os.path.abspath(__file__)).parent.parent.parent
         ref_samples_np = np.load(root / Path(ref_samples_path), allow_pickle=True)
@@ -92,12 +92,14 @@ class SyntheticEenergyEvaluator:
         idxs = torch.randperm(len(self.ref_samples))[:B]
         ref_samples = self.ref_samples[idxs].to(samples.device)
 
+        eval_dict = {}
         print("Computing energy W2...")
         gen_energy = self.energy.eval(samples)
         ref_energy = self.energy.eval(ref_samples)
         energy_w2 = (
             pot.emd2_1d(ref_energy.cpu().numpy(), gen_energy.cpu().numpy()) ** 0.5
         )
+        eval_dict["energy_w2"] = energy_w2
 
         print("Computing interatomic W2...")
         gen_dist = interatomic_dist(samples, self.n_particles, self.n_spatial_dim)
@@ -106,19 +108,18 @@ class SyntheticEenergyEvaluator:
             gen_dist.cpu().numpy().reshape(-1),
             ref_dist.cpu().numpy().reshape(-1),
         )
+        eval_dict["dist_w2"] = dist_w2
 
-        print("Computing particles W2...")
-        M = dist_point_clouds(
-            samples.reshape(-1, self.n_particles, self.n_spatial_dim).cpu(),
-            ref_samples.reshape(-1, self.n_particles, self.n_spatial_dim).cpu(),
-        )
-        a = torch.ones(M.shape[0]) / M.shape[0]
-        b = torch.ones(M.shape[0]) / M.shape[0]
-        eq_w2 = pot.emd2(M=M**2, a=a, b=b) ** 0.5
-        eq_w2 = eq_w2.item()
+        if self.do_particles_w2:
+            print("Computing particles W2...")
+            M = dist_point_clouds(
+                samples.reshape(-1, self.n_particles, self.n_spatial_dim).cpu(),
+                ref_samples.reshape(-1, self.n_particles, self.n_spatial_dim).cpu(),
+            )
+            a = torch.ones(M.shape[0]) / M.shape[0]
+            b = torch.ones(M.shape[0]) / M.shape[0]
+            eq_w2 = pot.emd2(M=M**2, a=a, b=b) ** 0.5
+            eq_w2 = eq_w2.item()
+            eval_dict["eq_w2"] = eq_w2
 
-        return {
-            "energy_w2": energy_w2,
-            "eq_w2": eq_w2,
-            "dist_w2": dist_w2,
-        }
+        return eval_dict

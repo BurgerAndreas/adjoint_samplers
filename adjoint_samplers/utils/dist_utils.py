@@ -79,6 +79,8 @@ class Delta(distributions.Distribution):
 class CenteredParticlesGauss(distributions.Distribution):
     """Sample particles with zero center of mass"""
 
+    arg_constraints = {}
+
     def __init__(
         self,
         n_particles,
@@ -110,6 +112,8 @@ class CenteredParticlesHarmonic(distributions.Distribution):
     non-isotropic Gaussian based on a harmonic prior
     https://arxiv.org/pdf/2304.02198
     """
+
+    arg_constraints = {}
 
     def __init__(
         self,

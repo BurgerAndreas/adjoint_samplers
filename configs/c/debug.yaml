@@ -1,0 +1,23 @@
+# @package _global_
+
+project: adjoint_sampler
+train_itr_per_epoch: 10
+init_stage: adjoint
+
+# === hardward related  ===
+resample_batch_size: 512
+train_batch_size: 512
+eval_batch_size: 2000
+num_eval_samples: ${eval_batch_size}
+
+evaluator:
+  # _target_: adjoint_samplers.components.evaluator.SyntheticEenergyEvaluator
+  # ref_samples_path: data/test_split_DW4.npy
+  do_particles_w2: false
+
+# === training ===
+num_epochs: 5
+
+# === logging  ===
+use_wandb: False
+eval_freq: 4

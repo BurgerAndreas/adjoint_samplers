@@ -9,8 +9,10 @@ from adjoint_samplers.energies.base_energy import BaseEnergy
 class DistEnergy(BaseEnergy):
     """An energy function given a distribution"""
 
-    def __init__(self, dist: Distribution, device: str = "cpu") -> None:
-        super().__init__(name=dist.name, dim=dist.dim)
+    def __init__(
+        self, dist: Distribution, device: str = "cpu", gad: bool = False
+    ) -> None:
+        super().__init__(name=dist.name, dim=dist.dim, gad=gad)
         self.dist = dist
         self.dist.to(device)
         self.device = device

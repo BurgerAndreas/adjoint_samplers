@@ -23,7 +23,7 @@ def setup(cfg):
         print(
             "{} \t Memory: {:.2f}GB".format(props.name, props.total_memory / (1024**3))
         )
-    print(dict(os.environ))
+    # print("environment variables: \n", dict(os.environ))
     print("job dir: {}".format(os.path.dirname(os.path.realpath(__file__))))
 
     distributed_mode.init_distributed_mode(cfg)

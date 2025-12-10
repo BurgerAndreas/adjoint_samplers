@@ -5,18 +5,27 @@ import traceback
 import hydra
 import numpy as np
 import termcolor
+from sklearn.cluster import DBSCAN
+from sklearn.metrics import pairwise_distances
 
 from pathlib import Path
 
 import torch
 import torch.backends.cudnn as cudnn
 import matplotlib.pyplot as plt
+import wandb
 
 from adjoint_samplers.components.sde import ControlledSDE, sdeint
 from adjoint_samplers.train_loop import train_one_epoch
 import adjoint_samplers.utils.train_utils as train_utils
 import adjoint_samplers.utils.distributed_mode as distributed_mode
-from adjoint_samplers.utils.eval_utils import interatomic_dist, fig2img
+from adjoint_samplers.utils.frequency_analysis import analyze_frequencies_torch
+from adjoint_samplers.utils.eval_utils import (
+    interatomic_dist,
+    fig2img,
+    build_xyz_from_positions,
+    render_xyz_grid,
+)
 
 
 cudnn.benchmark = True
@@ -50,7 +59,7 @@ def magenta(content):
 def main(cfg):
     try:
         train_utils.setup(cfg)
-        print(str(cfg))
+        # print(str(cfg))
 
         device = "cuda"
 
@@ -217,7 +226,18 @@ def main(cfg):
 
                     samples = torch.cat(x1_list, dim=0)
 
+                    # Compare to reference samples
+                    eval_dict = evaluator(samples)
+                    print(f"Evaluated @{epoch=}!")
+
+                    if "hist_img" in eval_dict:
+                        fname = eval_dir / f"gen_epoch_{epoch}.png"
+                        eval_dict["hist_img"].save(fname)
+                        print(f"Saved generated samples to {fname.resolve()}")
+
+                    #####################
                     # Plot histograms for energy and interatomic distances
+                    #####################
                     print("Plotting energy and distance histograms...")
                     fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
@@ -233,15 +253,10 @@ def main(cfg):
                     if hasattr(energy, "n_particles") and hasattr(
                         energy, "n_spatial_dim"
                     ):
-                        distances = (
-                            interatomic_dist(
-                                samples, energy.n_particles, energy.n_spatial_dim
-                            )
-                            .detach()
-                            .cpu()
-                            .numpy()
-                            .reshape(-1)
-                        )
+                        distances_full = interatomic_dist(
+                            samples, energy.n_particles, energy.n_spatial_dim
+                        ).detach()
+                        distances = distances_full.cpu().numpy().reshape(-1)
                         axes[1].hist(distances, bins=50, density=True)
                         axes[1].set_xlabel("Interatomic Distance")
                         axes[1].set_ylabel("Density")
@@ -249,6 +264,7 @@ def main(cfg):
                             f"Interatomic Distance Distribution (epoch {epoch})"
                         )
                         axes[1].grid(True)
+
                     else:
                         axes[1].text(
                             0.5,
@@ -261,15 +277,148 @@ def main(cfg):
                         axes[1].set_title("Interatomic Distance Distribution")
 
                     plt.tight_layout()
-                    hist_img = fig2img(fig)
+                    fig.canvas.draw()  # ensure matplotlib renders before conversion
+                    energy_dist_hist_img = fig2img(fig)
+                    # fname = eval_dir / f"energy_dist_hist.png"
+                    # energy_dist_hist_img.save(
+                    #     fname
+                    # )
+                    # print(f"Saved energy dist hist to {fname.resolve()}")
+
+                    # if writer.writer is not None:
+                    fname = eval_dir / "energy_dist_hist.png"
+                    energy_dist_hist_img.save(fname)
+                    print(f"Saved energy dist hist to {fname.resolve()}")
+
+                    # also log the histogram image to wandb
+                    eval_dict["energy_dist_hist"] = wandb.Image(energy_dist_hist_img)
                     plt.close(fig)
-                    hist_img.save(eval_dir / f"energy_dist_hist_epoch_{epoch}.png")
 
-                    eval_dict = evaluator(samples)
-                    print(f"Evaluated @{epoch=}!")
+                    #####################
+                    # Cluster samples by pairwise distance vectors to approximate modes
+                    #####################
+                    if hasattr(energy, "n_particles") and hasattr(
+                        energy, "n_spatial_dim"
+                    ):
+                        # Cluster samples by pairwise distance vectors to approximate modes
+                        dist_features = (
+                            distances_full.cpu()
+                            .numpy()
+                            .reshape(distances_full.shape[0], -1)
+                        )
+                        dbscan = DBSCAN(
+                            eps=cfg.dbscan.eps, min_samples=cfg.dbscan.min_samples
+                        )
+                        labels = dbscan.fit_predict(dist_features)
+                        uniq, counts = np.unique(labels, return_counts=True)
 
-                    if "hist_img" in eval_dict:
-                        eval_dict["hist_img"].save(eval_dir / "gen.png")
+                        # compute medoid indices per cluster (exclude noise label -1)
+                        medoid_indices = []
+                        for label in uniq:
+                            if label == -1:
+                                continue
+                            idxs = np.where(labels == label)[0]
+                            if len(idxs) == 0:
+                                continue
+                            sub_feat = dist_features[idxs]
+                            pdists = pairwise_distances(sub_feat)
+                            medoid_local = np.argmin(pdists.sum(axis=1))
+                            medoid_indices.append(idxs[medoid_local])
+
+                        # order clusters by size (desc) and cap to 9
+                        label_counts = {int(k): int(v) for k, v in zip(uniq, counts)}
+                        sorted_labels = [
+                            lab
+                            for lab, _ in sorted(
+                                label_counts.items(), key=lambda kv: kv[1], reverse=True
+                            )
+                            if lab != -1
+                        ]
+                        medoid_indices_ordered = []
+                        for lab in sorted_labels:
+                            idxs = np.where(labels == lab)[0]
+                            if len(idxs) == 0:
+                                continue
+                            sub_feat = dist_features[idxs]
+                            pdists = pairwise_distances(sub_feat)
+                            medoid_local = np.argmin(pdists.sum(axis=1))
+                            medoid_indices_ordered.append(int(idxs[medoid_local]))
+                            if len(medoid_indices_ordered) >= 9:
+                                break
+                        num_clusters = len(medoid_indices_ordered)
+
+                        # render medoid representatives as molecules if available
+                        if num_clusters > 0:
+                            print(f"Rendering {num_clusters} medoid representatives...")
+                            medoid_xyz = []
+                            freq_minima = 0
+                            freq_ts = 0
+                            freq_other = 0
+                            freq_failed = 0
+                            freq_samples = 0
+                            for idx in medoid_indices_ordered:
+                                pos = (
+                                    samples[idx]
+                                    .detach()
+                                    .reshape(energy.n_particles, energy.n_spatial_dim)
+                                    .cpu()
+                                    .numpy()
+                                )
+                                # if 2D positions, pad a zero z-dim for 3D visualization
+                                if pos.shape[1] == 2:
+                                    pos = np.concatenate(
+                                        [pos, np.zeros((pos.shape[0], 1))], axis=1
+                                    )
+                                xyz = build_xyz_from_positions(
+                                    pos, atom_type="C", center=True
+                                )
+                                medoid_xyz.append(xyz)
+                                if energy.n_spatial_dim == 3:
+                                    atoms = ["x"] * energy.n_particles
+                                    hess = energy.hessian_E(
+                                        samples[idx : idx + 1]
+                                    ).detach()[0]
+                                    freq = analyze_frequencies_torch(
+                                        hessian=hess,
+                                        cart_coords=samples[idx],
+                                        atomsymbols=atoms,
+                                    )
+                                    neg_num = int(freq["neg_num"])
+                                    freq_samples += 1
+                                    if neg_num == 0:
+                                        freq_minima += 1
+                                    elif neg_num == 1:
+                                        freq_ts += 1
+                                    else:
+                                        freq_other += 1
+                                else:
+                                    freq_failed += 1
+                            medoid_grid_img = render_xyz_grid(
+                                medoid_xyz, ncols=3, width=900, height=900
+                            ).convert("RGB")
+                            # fname = eval_dir / f"dbscan_medoid_grid.png"
+                            # medoid_grid_img.save(fname)
+                            # print(f"Saved medoid grid to {fname}")
+                            # if writer.writer is not None:
+                            fname = eval_dir / "dbscan_medoid_grid.png"
+                            medoid_grid_img.save(fname)
+                            print(f"Saved medoid grid to {fname.resolve()}")
+                            eval_dict["dbscan_medoid_grid"] = wandb.Image(
+                                medoid_grid_img
+                            )
+                            if freq_samples > 0:
+                                eval_dict["freq_minima"] = freq_minima
+                                eval_dict["freq_transition_states"] = freq_ts
+                                eval_dict["freq_other"] = freq_other
+                                eval_dict["freq_failed"] = freq_failed
+                                denom = freq_minima if freq_minima > 0 else 1
+                                eval_dict["freq_ts_over_min_ratio"] = freq_ts / denom
+                                eval_dict["freq_total_samples"] = freq_samples
+                            elif freq_failed > 0:
+                                eval_dict["freq_failed"] = freq_failed
+
+                        else:
+                            print("No clusters found")
 
                     writer.log(eval_dict, step=epoch)
 
