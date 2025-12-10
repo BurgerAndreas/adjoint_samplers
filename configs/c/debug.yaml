@@ -16,8 +16,9 @@ evaluator:
   do_particles_w2: false
 
 # === training ===
-num_epochs: 5
+num_epochs: 20
 
 # === logging  ===
 use_wandb: False
-eval_freq: 4
+eval_freq: 19
+save_ckpt: false

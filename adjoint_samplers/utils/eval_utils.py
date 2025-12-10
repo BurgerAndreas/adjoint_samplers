@@ -1,17 +1,50 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
-import asyncio
 import io
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 import numpy as np
 import PIL
-import py3Dmol
+import pymol
+from pymol import cmd
+import seaborn as sns
 import torch
 from matplotlib import pyplot as plt
-from pyppeteer import launch
 from scipy.optimize import linear_sum_assignment
+
+# Initialize PyMOL once at module level
+_pymol_initialized = False
+
+
+def _init_pymol():
+    global _pymol_initialized
+    if not _pymol_initialized:
+        pymol.finish_launching(["pymol", "-c", "-q"])
+        _pymol_initialized = True
+
+
+def _apply_pastel_colors():
+    """Apply pastel colors from seaborn's deep palette to elements."""
+    palette = sns.color_palette("deep")
+    # Map elements to palette colors (C, O, N, H, S, P, F, Cl, Br, I, etc.)
+    # PyMOL expects RGB values as a list [R, G, B] with values 0-1
+    element_colors = {
+        "C": list(palette[7]),  # gray
+        "O": list(palette[3]),  # red
+        "N": list(palette[0]),  # blue
+        "H": list(palette[7]),  # gray
+        "S": list(palette[2]),  # green
+        "P": list(palette[1]),  # orange
+        "F": list(palette[4]),  # purple
+        "Cl": list(palette[2]),  # green
+        "Br": list(palette[5]),  # brown
+        "I": list(palette[6]),  # pink
+    }
+
+    for elem, rgb in element_colors.items():
+        cmd.set_color(f"elem_{elem}", rgb)
+        cmd.color(f"elem_{elem}", f"elem {elem}")
 
 
 def get_fig_axes(ncol, nrow=1, ax_length_in=2.0):
@@ -133,31 +166,47 @@ def build_xyz_from_positions(positions, atom_type="C", center=True):
 
 
 def render_xyz_to_png(xyz_str, width=300, height=300):
-    view = py3Dmol.view(width=width, height=height)
-    view.addModel(xyz_str, "xyz")
-    view.setStyle({"stick": {}})
-    view.zoomTo()
+    _init_pymol()
 
-    html = view.write_html()
+    # Clean up any existing molecules
+    cmd.delete("all")
 
-    async def _html_to_png_bytes():
-        with NamedTemporaryFile(delete=False, suffix=".html") as tmp:
-            tmp_path = Path(tmp.name)
-            tmp.write(html.encode("utf-8"))
+    with NamedTemporaryFile(delete=False, suffix=".xyz", mode="w") as tmp:
+        tmp_path = Path(tmp.name)
+        tmp.write(xyz_str)
 
-        browser = await launch(
-            headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"]
-        )
-        page = await browser.newPage()
-        await page.setViewport({"width": width, "height": height})
-        await page.goto(tmp_path.as_uri(), waitUntil="networkidle0")
-        await page.waitFor(100)
-        png_bytes = await page.screenshot(fullPage=False)
-        await browser.close()
-        tmp_path.unlink(missing_ok=True)
-        return png_bytes
+    cmd.load(str(tmp_path), "mol")
+    cmd.viewport(width, height)
+    cmd.bg_color("white")
+    cmd.hide("all")
+    # Try both sticks and spheres to ensure visibility
+    cmd.show("sticks")
+    cmd.show("spheres", "all")
+    cmd.set("stick_radius", 0.2)
+    cmd.set("stick_quality", 20)
+    cmd.set("sphere_scale", 0.3)
+    _apply_pastel_colors()
+    cmd.set("orthoscopic", 1)
+    cmd.set("ray_shadows", 0)
+    cmd.set("ray_shadow", 0)
+    cmd.set("ray_opaque_background", 1)
+    cmd.zoom("mol", buffer=0)
+    cmd.refresh()
 
-    return asyncio.run(_html_to_png_bytes())
+    with NamedTemporaryFile(delete=False, suffix=".png") as png_tmp:
+        png_path = Path(png_tmp.name)
+
+    cmd.ray(width, height)
+    cmd.png(str(png_path), width=width, height=height, dpi=300)
+
+    with open(png_path, "rb") as f:
+        png_bytes = f.read()
+
+    png_path.unlink(missing_ok=True)
+    tmp_path.unlink(missing_ok=True)
+    cmd.delete("all")
+
+    return png_bytes
 
 
 def render_xyz_grid(xyz_strings, ncols=3, width=900, height=900):
@@ -167,10 +216,51 @@ def render_xyz_grid(xyz_strings, ncols=3, width=900, height=900):
     cell_w = width // ncols
     cell_h = height // ncols
 
+    _init_pymol()
+
     imgs = []
+
     for i in range(n):
-        png_bytes = render_xyz_to_png(xyz_strings[i], width=cell_w, height=cell_h)
-        imgs.append(PIL.Image.open(io.BytesIO(png_bytes)))
+        with NamedTemporaryFile(delete=False, suffix=".xyz", mode="w") as tmp:
+            tmp_path = Path(tmp.name)
+            tmp.write(xyz_strings[i])
+
+        mol_name = "mol"
+        cmd.load(str(tmp_path), mol_name)
+        cmd.viewport(cell_w, cell_h)
+        cmd.bg_color("white")
+        cmd.hide("all")
+        # Try both sticks and spheres to ensure visibility
+        cmd.show("sticks")
+        cmd.show("spheres", "all")
+        cmd.set("stick_radius", 0.2)
+        cmd.set("stick_quality", 20)
+        cmd.set("sphere_scale", 0.3)
+        _apply_pastel_colors()
+        cmd.set("orthoscopic", 1)
+        cmd.set("ray_shadows", 0)
+        cmd.set("ray_shadow", 0)
+        cmd.set("ray_opaque_background", 1)
+        cmd.zoom(mol_name, buffer=0)
+        cmd.refresh()
+
+        with NamedTemporaryFile(delete=False, suffix=".png") as png_tmp:
+            png_path = Path(png_tmp.name)
+
+        cmd.ray(cell_w, cell_h)
+        cmd.png(str(png_path), width=cell_w, height=cell_h, dpi=300)
+
+        with open(png_path, "rb") as f:
+            png_bytes = f.read()
+
+        img = PIL.Image.open(io.BytesIO(png_bytes))
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+        imgs.append(img)
+
+        cmd.delete("all")
+        tmp_path.unlink(missing_ok=True)
+        png_path.unlink(missing_ok=True)
 
     grid = PIL.Image.new("RGB", (cell_w * ncols, cell_h * ncols), color=(255, 255, 255))
     for idx, img in enumerate(imgs):

@@ -9,10 +9,12 @@ from sklearn.cluster import DBSCAN
 from sklearn.metrics import pairwise_distances
 
 from pathlib import Path
+import io
 
 import torch
 import torch.backends.cudnn as cudnn
 import matplotlib.pyplot as plt
+import PIL
 import wandb
 
 from adjoint_samplers.components.sde import ControlledSDE, sdeint
@@ -25,6 +27,7 @@ from adjoint_samplers.utils.eval_utils import (
     fig2img,
     build_xyz_from_positions,
     render_xyz_grid,
+    render_xyz_to_png,
 )
 
 
@@ -393,19 +396,41 @@ def main(cfg):
                                         freq_other += 1
                                 else:
                                     freq_failed += 1
-                            medoid_grid_img = render_xyz_grid(
-                                medoid_xyz, ncols=3, width=900, height=900
-                            ).convert("RGB")
-                            # fname = eval_dir / f"dbscan_medoid_grid.png"
-                            # medoid_grid_img.save(fname)
-                            # print(f"Saved medoid grid to {fname}")
-                            # if writer.writer is not None:
-                            fname = eval_dir / "dbscan_medoid_grid.png"
-                            medoid_grid_img.save(fname)
-                            print(f"Saved medoid grid to {fname.resolve()}")
-                            eval_dict["dbscan_medoid_grid"] = wandb.Image(
-                                medoid_grid_img
-                            )
+
+                            # Render first 3 medoids individually
+                            for i, xyz_str in enumerate(medoid_xyz[:3]):
+                                png_bytes = render_xyz_to_png(
+                                    xyz_str, width=600, height=600
+                                )
+                                medoid_img = PIL.Image.open(io.BytesIO(png_bytes))
+                                if medoid_img.mode != "RGB":
+                                    medoid_img = medoid_img.convert("RGB")
+                                fname = eval_dir / f"medoid_{i}.png"
+                                medoid_img.save(fname)
+                                print(f"Saved medoid {i} to {fname.resolve()}")
+                                eval_dict[f"medoid_{i}"] = wandb.Image(medoid_img)
+
+                            if len(medoid_xyz) == 0:
+                                print(
+                                    "Warning: medoid_xyz is empty, skipping grid rendering"
+                                )
+                            else:
+                                medoid_grid_img = render_xyz_grid(
+                                    medoid_xyz,
+                                    ncols=3,
+                                    width=900,
+                                    height=900,
+                                )
+                                # fname = eval_dir / f"dbscan_medoid_grid.png"
+                                # medoid_grid_img.save(fname)
+                                # print(f"Saved medoid grid to {fname}")
+                                # if writer.writer is not None:
+                                fname = eval_dir / "dbscan_medoid_grid.png"
+                                medoid_grid_img.save(fname)
+                                print(f"Saved medoid grid to {fname.resolve()}")
+                                eval_dict["dbscan_medoid_grid"] = wandb.Image(
+                                    medoid_grid_img
+                                )
                             if freq_samples > 0:
                                 eval_dict["freq_minima"] = freq_minima
                                 eval_dict["freq_transition_states"] = freq_ts

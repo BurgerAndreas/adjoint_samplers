@@ -46,6 +46,7 @@ num_eval_samples: ${eval_batch_size}
 # === logging  ===
 use_wandb: True
 slurm_job_id: null
+save_ckpt: true
 
 # Stores the command line arguments overrides
 override_dirname: ${hydra:job.override_dirname}
