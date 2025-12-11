@@ -130,8 +130,8 @@ class LennardJonesEnergy(BaseEnergy):
             energy_factor=1.0,
         )
 
-    def eval(self, samples: torch.Tensor) -> torch.Tensor:
-        return -self.lennard_jones._log_prob(samples).squeeze(-1)
+    def eval(self, samples: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
+        return -self.lennard_jones._log_prob(samples).squeeze(-1) * beta
 
     # def grad_E(self, samples: torch.Tensor) -> torch.Tensor:
     #     """Override to use analytical gradient implementation."""

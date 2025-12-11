@@ -87,13 +87,13 @@ class AdjointMatcher(Matcher):
         assert adjoints.shape == (T, B, D)
         return adjoints
 
-    def _compute_adjoint1(self, x1, is_asbs_init_stage):
+    def _compute_adjoint1(self, x1, is_asbs_init_stage, beta: float = 1.0):
         if is_asbs_init_stage:
             # IPF init: First Adjoint Matching stage
             # of ASBS uses zero corrector
-            adjoint1 = self.grad_term_cost.grad_E(x1)
+            adjoint1 = self.grad_term_cost.grad_E(x1, beta=beta)
         else:
-            adjoint1 = self.grad_term_cost(x1)
+            adjoint1 = self.grad_term_cost(x1, beta=beta)
         return adjoint1
 
     def populate_buffer(
@@ -101,6 +101,7 @@ class AdjointMatcher(Matcher):
         x0: torch.Tensor,
         timesteps: torch.Tensor,
         is_asbs_init_stage: bool,
+        beta: float = 1.0,
     ):
         (B, D), T = x0.shape, len(timesteps)
         assert x0.device == timesteps.device
@@ -117,7 +118,7 @@ class AdjointMatcher(Matcher):
         xs = torch.stack(xs)
         assert xs.shape == (T, B, D)
 
-        adjoint1 = self._compute_adjoint1(xs[-1], is_asbs_init_stage).clone()
+        adjoint1 = self._compute_adjoint1(xs[-1], is_asbs_init_stage, beta=beta).clone()
         adjoints = self._backward_simulate(adjoint1, timesteps, xs)
         assert adjoints.shape == (T, B, D)
 
@@ -177,6 +178,7 @@ class AdjointVEMatcher(AdjointMatcher):
         x0: torch.Tensor,
         timesteps: torch.Tensor,
         is_asbs_init_stage: bool,
+        beta: float = 1.0,
     ):
         (x0, x1) = sdeint(
             self.sde,
@@ -184,7 +186,7 @@ class AdjointVEMatcher(AdjointMatcher):
             timesteps,
             only_boundary=True,
         )
-        adjoint1 = self._compute_adjoint1(x1, is_asbs_init_stage).clone()
+        adjoint1 = self._compute_adjoint1(x1, is_asbs_init_stage, beta=beta).clone()
 
         self._check_buffer_sample_shape(x0, x1, adjoint1)
         self.buffer.add(

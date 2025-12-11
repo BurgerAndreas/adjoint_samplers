@@ -17,13 +17,13 @@ class DistEnergy(BaseEnergy):
         self.dist.to(device)
         self.device = device
 
-    def eval(self, x: torch.Tensor) -> torch.Tensor:
-        return -self.dist.log_prob(x)
+    def eval(self, x: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
+        return -self.dist.log_prob(x) * beta
 
-    def grad_E(self, x: torch.Tensor) -> torch.Tensor:
+    def grad_E(self, x: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
         # return analytic score if implemented,
         # otherwise fall back to default autograd
         if hasattr(self.dist, "score"):
-            return -self.dist.score(x)
+            return -self.dist.score(x) * beta
         else:
-            return super().grad_E(x)
+            return super().grad_E(x, beta=beta)

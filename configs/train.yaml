@@ -33,6 +33,12 @@ train_batch_size: 512
 eval_batch_size: 1000
 num_eval_samples: ${eval_batch_size}
 
+# temperature schedule
+temperature:
+  schedule: constant  # options: constant, linear
+  beta_start: 1.0     # used for constant and linear
+  beta_end: 1.0       # used for linear decay over total batches
+
 # === paths  ===
 # dataset:
 #   datapath: /project/aip-aspuru/aburger/Transition1x/data/transition1x.h5

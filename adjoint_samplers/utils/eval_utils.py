@@ -240,14 +240,16 @@ def set_pymol_settings():
     cmd.set("stick_quality", 20)
     cmd.set("sphere_scale", 0.1)
     # cmd.set("orthoscopic", 1) # parallel projection, no depth foreshortening
-    # cmd.set("ray_shadows", 0) # disable ray-tracing shadows
-    # cmd.set("ray_shadow", 0)
-    # cmd.set("light_count", 0)
-    cmd.set("shininess", 0)
-    cmd.set("specular", 0.0)  # no highlights
-    cmd.set("ambient", 2)  # ambient light = brightness
-    # cmd.set("reflect", 0)
-    # cmd.set("direct", 0)
+    cmd.set("ray_shadows", 0)  # disable ray-tracing shadows
+    cmd.set("ray_shadow", 0)
+    # cmd.set("light_count", 1) # 0 = no highlights
+    # # no highlights
+    # cmd.set("shininess", 0)
+    # cmd.set("specular", 0.0)
+    # 2 = flat
+    # cmd.set("ambient", 2)  # ambient light = brightness
+    # cmd.set("reflect", 0) # dark
+    # cmd.set("direct", 0) # black
     cmd.set("ray_opaque_background", 1)
     _apply_pastel_colors()
     _add_distance_labels("mol")

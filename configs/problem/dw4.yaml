@@ -8,6 +8,7 @@ energy:
   _target_: adjoint_samplers.energies.double_well_energy.DoubleWellEnergy
   dim: ${dim}
   n_particles: ${n_particles}
+  gad: false
 
 evaluator:
   _target_: adjoint_samplers.components.evaluator.SyntheticEenergyEvaluator

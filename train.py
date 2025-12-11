@@ -136,7 +136,7 @@ def render_medoids_and_grid(medoid_indices, samples, energy, eval_dir, tag, eval
         eval_dict[f"dbscan_medoid_grid_{tag}"] = wandb.Image(medoid_grid_img)
 
 
-def run_frequency_analysis(medoid_indices, samples, energy, eval_dict, tag):
+def run_frequency_analysis(medoid_indices, samples, energy, eval_dict, tag, beta=1.0):
     """Compute minima/TS/other counts on medoids and log with tag."""
     if len(medoid_indices) == 0:
         return
@@ -151,7 +151,7 @@ def run_frequency_analysis(medoid_indices, samples, energy, eval_dict, tag):
     freq_samples = 0
     for idx in medoid_indices:
         atoms = ["x"] * energy.n_particles
-        hess = energy.hessian_E(samples[idx : idx + 1]).detach()[0]
+        hess = energy.hessian_E(samples[idx : idx + 1], beta=beta).detach()[0]
         if energy.n_spatial_dim == 3:
             freq = analyze_frequencies_torch(
                 hessian=hess,
@@ -189,12 +189,12 @@ def run_frequency_analysis(medoid_indices, samples, energy, eval_dict, tag):
             eval_dict["freq_total_samples"] = freq_samples
 
 
-def plot_energy_distance_hist(samples, energy, epoch, eval_dir, eval_dict):
+def plot_energy_distance_hist(samples, energy, epoch, eval_dir, eval_dict, beta=1.0):
     """Plot energy and interatomic distance histograms and log to eval_dict."""
     print("Plotting energy and distance histograms...")
     fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
-    energy_values = energy.eval(samples).detach().cpu().numpy()
+    energy_values = energy.eval(samples, beta=beta).detach().cpu().numpy()
     axes[0].hist(energy_values, bins=50, density=True)
     axes[0].set_xlabel("Energy")
     axes[0].set_ylabel("Density")
@@ -411,9 +411,12 @@ def main(cfg):
         eval_dir.mkdir(exist_ok=True)
         evaluator = hydra.utils.instantiate(cfg.evaluator, energy=energy)
 
+        total_batches = cfg.num_epochs * cfg.train_itr_per_epoch
+
         print(f"Starting from {start_epoch}/{cfg.num_epochs} epochs...")
         for epoch in range(start_epoch, cfg.num_epochs):
             stage = train_utils.determine_stage(epoch, cfg)
+            global_batch_start = epoch * cfg.train_itr_per_epoch
 
             matcher, model = {
                 "adjoint": (adjoint_matcher, controller),
@@ -421,7 +424,16 @@ def main(cfg):
             }.get(stage)
 
             loss = train_one_epoch(
-                matcher, model, source, optimizer, lr_schedule, epoch, device, cfg
+                matcher,
+                model,
+                source,
+                optimizer,
+                lr_schedule,
+                epoch,
+                device,
+                cfg,
+                global_batch_start,
+                total_batches,
             )
 
             writer.log(
@@ -450,6 +462,13 @@ def main(cfg):
             if distributed_mode.is_main_process() and eval_this_epoch:
                 # eval only after adjoint training
                 if stage == "adjoint":
+                    eval_batch_idx = min(
+                        global_batch_start + cfg.train_itr_per_epoch - 1,
+                        total_batches - 1,
+                    )
+                    beta_eval = train_utils.get_beta(
+                        cfg.temperature, eval_batch_idx, total_batches
+                    )
                     n_gen_samples = 0
                     x1_list = []
                     while n_gen_samples < cfg.num_eval_samples:
@@ -497,7 +516,9 @@ def main(cfg):
                     fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
                     # Energy histogram
-                    energy_values = energy.eval(samples).detach().cpu().numpy()
+                    energy_values = (
+                        energy.eval(samples, beta=beta_eval).detach().cpu().numpy()
+                    )
                     axes[0].hist(energy_values, bins=50, density=True)
                     axes[0].set_xlabel("Energy")
                     axes[0].set_ylabel("Density")
@@ -555,7 +576,7 @@ def main(cfg):
                     if hasattr(energy, "n_particles") and hasattr(
                         energy, "n_spatial_dim"
                     ):
-                        cluster_samples = samples[:cfg.num_samples_clustering]
+                        cluster_samples = samples[: cfg.num_samples_clustering]
                         distances_cluster = interatomic_dist(
                             cluster_samples, energy.n_particles, energy.n_spatial_dim
                         ).detach()
@@ -650,6 +671,7 @@ def main(cfg):
                             energy,
                             eval_dict,
                             tag="sorted",
+                            beta=beta_eval,
                         )
                         run_frequency_analysis(
                             medoid_indices_ordered_rmsd,
@@ -657,6 +679,7 @@ def main(cfg):
                             energy,
                             eval_dict,
                             tag="rmsd",
+                            beta=beta_eval,
                         )
 
                     writer.log(eval_dict, step=epoch)

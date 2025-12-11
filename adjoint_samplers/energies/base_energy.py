@@ -12,27 +12,27 @@ class BaseEnergy:
         self.gad = gad
 
     # E(x)
-    def eval(self, x: torch.Tensor) -> torch.Tensor:
+    def eval(self, x: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
         raise NotImplementedError()
 
     # ∇E(x) - internal autograd implementation
-    def _grad_E(self, x: torch.Tensor) -> torch.Tensor:
+    def _grad_E(self, x: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
         with torch.enable_grad():
             x = x.clone().detach().requires_grad_(True)
 
-            E = self.eval(x)
+            E = self.eval(x, beta=beta)
             grad_E = torch.autograd.grad(E.sum(), x, create_graph=False)[0]
 
         return grad_E
 
     # ∇E(x) - public method (can be overridden by subclasses)
-    def grad_E(self, x: torch.Tensor) -> torch.Tensor:
+    def grad_E(self, x: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
         if self.gad:
-            return self._grad_E_gad(x)
-        return self._grad_E(x)
+            return self._grad_E_gad(x, beta=beta)
+        return self._grad_E(x, beta=beta)
 
     # ∇²E(x) - Hessian matrix - internal autograd implementation
-    def _hessian_E(self, x: torch.Tensor) -> torch.Tensor:
+    def _hessian_E(self, x: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
         """Compute the Hessian matrix H_ij = ∂²E/∂x_i ∂x_j using autograd.
 
         Returns
@@ -46,7 +46,7 @@ class BaseEnergy:
 
         with torch.enable_grad():
             x = x.clone().detach().requires_grad_(True)
-            E = self.eval(x)
+            E = self.eval(x, beta=beta)
             grad_E = torch.autograd.grad(E.sum(), x, create_graph=True)[0]
 
             # Compute Hessian by taking gradient of each component of grad_E
@@ -60,11 +60,11 @@ class BaseEnergy:
         return hessian
 
     # ∇²E(x) - Hessian matrix - public method (can be overridden by subclasses)
-    def hessian_E(self, x: torch.Tensor) -> torch.Tensor:
-        return self._hessian_E(x)
+    def hessian_E(self, x: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
+        return self._hessian_E(x, beta=beta)
 
     # GAD vector field: ẋ = -∇V(x) + 2⟨∇V, v₁(x)⟩v₁(x)
-    def _grad_E_gad(self, x: torch.Tensor) -> torch.Tensor:
+    def _grad_E_gad(self, x: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
         """Compute GAD vector field instead of standard gradient.
 
         GAD formula: -∇V(x) + 2⟨∇V, v₁(x)⟩v₁(x)
@@ -73,10 +73,10 @@ class BaseEnergy:
         batch_size = x.shape[0]
 
         # Compute standard gradient ∇V
-        grad_V = self._grad_E(x)
+        grad_V = self._grad_E(x, beta=beta)
 
         # Compute Hessian H
-        H = self.hessian_E(x)
+        H = self.hessian_E(x, beta=beta)
 
         # Compute GAD for each sample in batch
         gad_vectors = []
@@ -100,13 +100,13 @@ class BaseEnergy:
         return torch.stack(gad_vectors, dim=0)
 
     # score := - ∇E(x)
-    def score(self, x: torch.Tensor) -> torch.Tensor:
-        return -self.grad_E(x)
+    def score(self, x: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
+        return -self.grad_E(x, beta=beta)
 
-    def __call__(self, x: torch.Tensor) -> Dict:
+    def __call__(self, x: torch.Tensor, beta: float = 1.0) -> Dict:
         assert x.ndim == 2 and x.shape[-1] == self.dim
 
         # forces: ∇E = - ∇ log p, as p(x) = C exp(-E(x))
         output_dict = {}
-        output_dict["forces"] = self.grad_E(x)
+        output_dict["forces"] = self.grad_E(x, beta=beta)
         return output_dict

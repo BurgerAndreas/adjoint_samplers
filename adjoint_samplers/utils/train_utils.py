@@ -71,6 +71,31 @@ def get_timesteps(
     raise ValueError("Unkown timestep rescaling method.")
 
 
+def get_beta(
+    schedule_cfg: DictConfig, global_batch_idx: int, total_batches: int
+) -> float:
+    """
+    Return beta for the current global batch index.
+
+    Supports:
+    - constant: always beta_start
+    - linear: linear decay from beta_start to beta_end over total_batches
+    """
+    mode = getattr(schedule_cfg, "schedule", "constant")
+    beta_start = float(getattr(schedule_cfg, "beta_start", 1.0))
+    if mode == "constant":
+        return beta_start
+
+    if mode == "linear":
+        beta_end = float(getattr(schedule_cfg, "beta_end", beta_start))
+        if total_batches <= 1:
+            return beta_end
+        frac = min(max(global_batch_idx / float(total_batches - 1), 0.0), 1.0)
+        return beta_start + (beta_end - beta_start) * frac
+
+    raise ValueError(f"Unknown temperature schedule: {mode}")
+
+
 def is_asbs_init_stage(epoch: int, cfg: DictConfig):
     if "corrector" not in cfg:
         return False

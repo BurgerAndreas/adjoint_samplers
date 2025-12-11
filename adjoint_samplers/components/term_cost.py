@@ -21,12 +21,12 @@ class GradEnergy:
 
         return grad_E * clip_coefficient
 
-    def grad_E(self, x1):
-        grad_E = self.energy(x1)["forces"]
+    def grad_E(self, x1, beta: float = 1.0):
+        grad_E = self.energy(x1, beta=beta)["forces"]
         return self.clip(grad_E)
 
-    def __call__(self, x1):
-        return self.grad_E(x1)
+    def __call__(self, x1, beta: float = 1.0):
+        return self.grad_E(x1, beta=beta)
 
 
 # For AS.
@@ -50,10 +50,10 @@ class ScoreGradTermCost(GradEnergy):
 
         assert isinstance(source, (Delta, Gauss))
 
-    def __call__(self, x1):
+    def __call__(self, x1, beta: float = 1.0):
         # Compute ∇log p^base_1(x) = (μ1 - x) / Σ1
         score = (self.mu1.to(x1) - x1) / self.var1.to(x1)
-        return self.grad_E(x1) + score
+        return self.grad_E(x1, beta=beta) + score
 
 
 # For ASBS.
@@ -64,11 +64,11 @@ class CorrectorGradTermCost(GradEnergy):
         super().__init__(energy, **kwargs)
         self.corrector = corrector
 
-    def __call__(self, x1, **kwargs):
+    def __call__(self, x1, beta: float = 1.0, **kwargs):
         t1 = torch.ones(x1.shape[0], 1).to(x1)
         with torch.no_grad():
             corrector = self.corrector(t1, x1)
-        return self.grad_E(x1) + corrector
+        return self.grad_E(x1, beta=beta) + corrector
 
 
 # For ASBS on n-particle systems.
@@ -78,10 +78,10 @@ class GraphCorrectorGradTermCost(CorrectorGradTermCost):
         self.n_particles = energy.n_particles
         self.n_spatial_dim = energy.n_spatial_dim
 
-    def grad_E(self, x1):
+    def grad_E(self, x1, beta: float = 1.0):
         N, D = self.n_particles, self.n_spatial_dim
 
-        grad_E = self.energy(x1)["forces"]
+        grad_E = self.energy(x1, beta=beta)["forces"]
 
         # clip spatial dim
         grad_E = self.clip(grad_E.view(-1, N, D)).view(-1, N * D)
@@ -104,10 +104,10 @@ class GraphScoreGradTermCost(ScoreGradTermCost):
 
         assert isinstance(source, (Delta, CenteredParticlesGauss))
 
-    def grad_E(self, x1):
+    def grad_E(self, x1, beta: float = 1.0):
         N, D = self.n_particles, self.n_spatial_dim
 
-        grad_E = self.energy(x1)["forces"]
+        grad_E = self.energy(x1, beta=beta)["forces"]
 
         # clip spatial dim
         grad_E = self.clip(grad_E.view(-1, N, D)).view(-1, N * D)

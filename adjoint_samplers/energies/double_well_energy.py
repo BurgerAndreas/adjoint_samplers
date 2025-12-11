@@ -71,16 +71,16 @@ class DoubleWellEnergy(BaseEnergy):
             two_event_dims=False,
         )
 
-    def eval(self, samples: torch.Tensor) -> torch.Tensor:
-        return self.multi_double_well._energy(samples).squeeze(-1)
+    def eval(self, samples: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
+        return self.multi_double_well._energy(samples).squeeze(-1) * beta
 
-    def grad_E(self, samples: torch.Tensor) -> torch.Tensor:
+    def grad_E(self, samples: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
         """Override to use analytical gradient implementation."""
-        return self.gradient_analytic(samples)
+        return self.gradient_analytic(samples) * beta
 
-    def hessian_E(self, samples: torch.Tensor) -> torch.Tensor:
+    def hessian_E(self, samples: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
         """Override to use analytical Hessian implementation."""
-        return self.hessian_analytic(samples)
+        return self.hessian_analytic(samples) * beta
 
     def gradient_analytic(self, samples: torch.Tensor) -> torch.Tensor:
         """Compute gradient analytically.

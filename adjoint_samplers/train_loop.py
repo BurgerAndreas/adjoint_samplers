@@ -26,6 +26,8 @@ def train_one_epoch(
     epoch: int,
     device: str,
     cfg: DictConfig,
+    global_batch_start: int,
+    total_batches: int,
 ):
     # build dataloader
     B = cfg.resample_batch_size
@@ -33,6 +35,9 @@ def train_one_epoch(
     loss_scale = matcher.loss_scale
 
     is_asbs_init_stage = train_utils.is_asbs_init_stage(epoch, cfg)
+    beta_buffer = train_utils.get_beta(
+        cfg.temperature, global_batch_start, total_batches
+    )
 
     for _ in range(M):
         x0 = source.sample(
@@ -41,7 +46,7 @@ def train_one_epoch(
             ]
         ).to(device)
         timesteps = train_utils.get_timesteps(**cfg.timesteps).to(device)
-        matcher.populate_buffer(x0, timesteps, is_asbs_init_stage)
+        matcher.populate_buffer(x0, timesteps, is_asbs_init_stage, beta=beta_buffer)
 
     dataloader = matcher.build_dataloader(cfg.train_batch_size)
     epoch_loss = MeanMetric().to(device, non_blocking=True)

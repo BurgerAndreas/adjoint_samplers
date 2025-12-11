@@ -7,6 +7,7 @@ energy:
   _target_: adjoint_samplers.energies.dist_energy.DistEnergy
   dist:
     _target_: adjoint_samplers.utils.dist_utils.GMM1D
+  gad: false
 
 evaluator:
   _target_: adjoint_samplers.components.evaluator.DemoEvaluator
