@@ -22,9 +22,11 @@ def _init_pymol():
     global _pymol_initialized
     if not _pymol_initialized:
         pymol.finish_launching(["pymol", "-c", "-q"])
-        # Silence command echoing (e.g., "PyMOL>viewport ...") on stdout.
-        cmd.feedback("disable", "all", "actions")
         _pymol_initialized = True
+    # Silence command echoing (e.g., "PyMOL>viewport ...") on stdout.
+    cmd.feedback("disable", "all", "actions")
+    cmd.feedback("disable", "all", "results")
+    cmd.feedback("disable", "all", "warnings")
 
 
 def _apply_pastel_colors():
@@ -50,7 +52,7 @@ def _apply_pastel_colors():
         cmd.color(f"elem_{elem}", f"elem {elem}")
 
 
-def _add_distance_labels(obj_name="mol", cutoff=3.5, max_pairs=10):
+def _add_distance_labels(obj_name="mol", cutoff=3.8, max_pairs=10):
     """Draw distance labels between nearby atom pairs to avoid clutter."""
     model = cmd.get_model(obj_name)
     atoms = model.atom
@@ -72,9 +74,11 @@ def _add_distance_labels(obj_name="mol", cutoff=3.5, max_pairs=10):
     pairs.sort(key=lambda t: t[0])
     for k, (_, i_idx, j_idx) in enumerate(pairs[:max_pairs]):
         dist_name = f"dist_{i_idx}_{j_idx}"
-        cmd.distance(dist_name, f"{obj_name} and index {i_idx}", f"{obj_name} and index {j_idx}")
+        cmd.distance(
+            dist_name, f"{obj_name} and index {i_idx}", f"{obj_name} and index {j_idx}"
+        )
         cmd.show("labels", dist_name)
-        cmd.set("label_size", 16, dist_name)
+        cmd.set("label_size", 14, dist_name)
         cmd.set("dash_width", 2, dist_name)
         cmd.set("dash_color", "black", dist_name)
 
@@ -297,7 +301,11 @@ def render_xyz_grid(xyz_strings, ncols=3, width=900, height=900):
         png_path.unlink(missing_ok=True)
 
     grid = PIL.Image.new("RGB", (cell_w * ncols, cell_h * ncols), color=(255, 255, 255))
-    # Draw thin separators between tiles for clarity.
+    for idx, img in enumerate(imgs):
+        r, c = divmod(idx, ncols)
+        grid.paste(img, (c * cell_w, r * cell_h))
+
+    # Draw thin separators between tiles for clarity (after pasting).
     draw = PIL.ImageDraw.Draw(grid)
     line_color = (200, 200, 200)
     for c in range(1, ncols):
@@ -306,9 +314,5 @@ def render_xyz_grid(xyz_strings, ncols=3, width=900, height=900):
     for r in range(1, ncols):
         y = r * cell_h
         draw.line([(0, y), (cell_w * ncols, y)], fill=line_color, width=1)
-
-    for idx, img in enumerate(imgs):
-        r, c = divmod(idx, ncols)
-        grid.paste(img, (c * cell_w, r * cell_h))
 
     return grid

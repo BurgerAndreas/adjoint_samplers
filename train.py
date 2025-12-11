@@ -231,7 +231,6 @@ def main(cfg):
 
                     # Compare to reference samples
                     eval_dict = evaluator(samples)
-                    print(f"Evaluated @{epoch=}!")
 
                     if "hist_img" in eval_dict:
                         fname = eval_dir / f"gen_epoch_{epoch}.png"
@@ -371,7 +370,7 @@ def main(cfg):
                                     pos, atom_type="C", center=True
                                 )
                                 medoid_xyz.append(xyz)
-                                
+
                             # Render first 3 medoids individually
                             for i, xyz_str in enumerate(medoid_xyz[:3]):
                                 png_bytes = render_xyz_to_png(
@@ -407,7 +406,7 @@ def main(cfg):
                                 eval_dict["dbscan_medoid_grid"] = wandb.Image(
                                     medoid_grid_img
                                 )
-                                
+
                             # frequency analysis
                             freq_minima = 0
                             freq_ts = 0
@@ -446,11 +445,15 @@ def main(cfg):
                                     eval_dict["freq_transition_states"] = freq_ts
                                     eval_dict["freq_other"] = freq_other
                                     denom = freq_minima if freq_minima > 0 else 1
-                                    eval_dict["freq_ts_over_min_ratio"] = freq_ts / denom
+                                    eval_dict["freq_ts_over_min_ratio"] = (
+                                        freq_ts / denom
+                                    )
                                     eval_dict["freq_total_samples"] = freq_samples
                             else:
-                                print(f"Warning: energy.n_spatial_dim is {energy.n_spatial_dim}, skipping frequency analysis")
-                                
+                                print(
+                                    f"Warning: energy.n_spatial_dim is {energy.n_spatial_dim}, skipping frequency analysis"
+                                )
+
                         else:
                             print("No clusters found")
 
