@@ -1,6 +1,8 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
 import io
+import os
+import sys
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -18,10 +20,35 @@ from scipy.optimize import linear_sum_assignment
 _pymol_initialized = False
 
 
+class _Silence:
+    """Redirect Python and OS-level stdout/stderr to /dev/null."""
+
+    def __enter__(self):
+        self._null = open(os.devnull, "w")
+        self._old_out = sys.stdout
+        self._old_err = sys.stderr
+        self._old_fd_out = os.dup(1)
+        self._old_fd_err = os.dup(2)
+        os.dup2(self._null.fileno(), 1)
+        os.dup2(self._null.fileno(), 2)
+        sys.stdout = self._null
+        sys.stderr = self._null
+
+    def __exit__(self, exc_type, exc, tb):
+        os.dup2(self._old_fd_out, 1)
+        os.dup2(self._old_fd_err, 2)
+        sys.stdout = self._old_out
+        sys.stderr = self._old_err
+        os.close(self._old_fd_out)
+        os.close(self._old_fd_err)
+        self._null.close()
+
+
 def _init_pymol():
     global _pymol_initialized
     if not _pymol_initialized:
-        pymol.finish_launching(["pymol", "-c", "-q"])
+        with _Silence():
+            pymol.finish_launching(["pymol", "-c", "-q"])
         _pymol_initialized = True
     # Silence command echoing (e.g., "PyMOL>viewport ...") on stdout.
     cmd.feedback("disable", "all", "actions")
@@ -35,11 +62,11 @@ def _apply_pastel_colors():
     # Map elements to palette colors (C, O, N, H, S, P, F, Cl, Br, I, etc.)
     # PyMOL expects RGB values as a list [R, G, B] with values 0-1
     element_colors = {
-        "C": list(palette[7]),  # gray
+        "C": list(palette[2]),  # green
         "O": list(palette[3]),  # red
         "N": list(palette[0]),  # blue
         "H": list(palette[7]),  # gray
-        "S": list(palette[2]),  # green
+        "S": list(palette[7]),  # gray
         "P": list(palette[1]),  # orange
         "F": list(palette[4]),  # purple
         "Cl": list(palette[2]),  # green
@@ -79,7 +106,11 @@ def _add_distance_labels(obj_name="mol", cutoff=3.8, max_pairs=10):
         )
         cmd.show("labels", dist_name)
         cmd.set("label_size", 14, dist_name)
-        cmd.set("dash_width", 2, dist_name)
+        # 12 different fonts from 5-16pt
+        cmd.set("label_font_id", 7, dist_name)
+        cmd.set("label_color", "black", dist_name)
+        cmd.set("label_outline_color", "white", dist_name)
+        cmd.set("dash_width", 1, dist_name)
         cmd.set("dash_color", "black", dist_name)
 
 
@@ -201,6 +232,28 @@ def build_xyz_from_positions(positions, atom_type="C", center=True):
     return "\n".join(lines)
 
 
+def set_pymol_settings():
+    # Try both sticks and spheres to ensure visibility
+    cmd.show("sticks")
+    cmd.show("spheres", "all")
+    cmd.set("stick_radius", 0.1)
+    cmd.set("stick_quality", 20)
+    cmd.set("sphere_scale", 0.1)
+    # cmd.set("orthoscopic", 1) # parallel projection, no depth foreshortening
+    # cmd.set("ray_shadows", 0) # disable ray-tracing shadows
+    # cmd.set("ray_shadow", 0)
+    # cmd.set("light_count", 0)
+    cmd.set("shininess", 0)
+    cmd.set("specular", 0.0)  # no highlights
+    cmd.set("ambient", 2)  # ambient light = brightness
+    # cmd.set("reflect", 0)
+    # cmd.set("direct", 0)
+    cmd.set("ray_opaque_background", 1)
+    _apply_pastel_colors()
+    _add_distance_labels("mol")
+    cmd.zoom("mol", buffer=0.2)
+
+
 def render_xyz_to_png(xyz_str, width=300, height=300):
     _init_pymol()
 
@@ -212,28 +265,17 @@ def render_xyz_to_png(xyz_str, width=300, height=300):
         tmp.write(xyz_str)
 
     cmd.load(str(tmp_path), "mol")
-    cmd.viewport(width, height)
+    with _Silence():
+        cmd.viewport(width, height)
     cmd.bg_color("white")
     cmd.hide("all")
-    # Try both sticks and spheres to ensure visibility
-    cmd.show("sticks")
-    cmd.show("spheres", "all")
-    cmd.set("stick_radius", 0.2)
-    cmd.set("stick_quality", 20)
-    cmd.set("sphere_scale", 0.3)
-    _apply_pastel_colors()
-    _add_distance_labels("mol")
-    # cmd.set("orthoscopic", 1)
-    # cmd.set("ray_shadows", 0)
-    # cmd.set("ray_shadow", 0)
-    cmd.set("ray_opaque_background", 1)
-    cmd.zoom("mol", buffer=0.5)
+    set_pymol_settings()
     cmd.refresh()
 
     with NamedTemporaryFile(delete=False, suffix=".png") as png_tmp:
         png_path = Path(png_tmp.name)
 
-    cmd.ray(width, height)
+    # cmd.ray(width, height)
     cmd.png(str(png_path), width=width, height=height, dpi=300)
 
     with open(png_path, "rb") as f:
@@ -264,22 +306,11 @@ def render_xyz_grid(xyz_strings, ncols=3, width=900, height=900):
 
         mol_name = "mol"
         cmd.load(str(tmp_path), mol_name)
-        cmd.viewport(cell_w, cell_h)
+        with _Silence():
+            cmd.viewport(cell_w, cell_h)
         cmd.bg_color("white")
         cmd.hide("all")
-        # Try both sticks and spheres to ensure visibility
-        cmd.show("sticks")
-        cmd.show("spheres", "all")
-        cmd.set("stick_radius", 0.2)
-        cmd.set("stick_quality", 20)
-        cmd.set("sphere_scale", 0.3)
-        _apply_pastel_colors()
-        _add_distance_labels(mol_name)
-        cmd.set("orthoscopic", 1)
-        cmd.set("ray_shadows", 0)
-        cmd.set("ray_shadow", 0)
-        cmd.set("ray_opaque_background", 1)
-        cmd.zoom(mol_name, buffer=0.5)
+        set_pymol_settings()
         cmd.refresh()
 
         with NamedTemporaryFile(delete=False, suffix=".png") as png_tmp:

@@ -7,6 +7,8 @@ from adjoint_samplers.utils.eval_utils import (
     build_xyz_from_positions,
 )
 import numpy as np
+import PIL
+import io
 
 # Create test output directory
 output_dir = Path("test_output")
@@ -22,8 +24,12 @@ H   -0.240000    0.926600    0.000000"""
 
 png_bytes = render_xyz_to_png(water_xyz, width=600, height=600)
 output_path = output_dir / "test_water.png"
-with open(output_path, "wb") as f:
-    f.write(png_bytes)
+medoid_img = PIL.Image.open(io.BytesIO(png_bytes))
+if medoid_img.mode != "RGB":
+    medoid_img = medoid_img.convert("RGB")
+medoid_img.save(output_path)
+# with open(output_path, "wb") as f:
+#     f.write(png_bytes)
 print(f"  Saved to {output_path.resolve()}")
 
 # Test 2: Methane (CH4)

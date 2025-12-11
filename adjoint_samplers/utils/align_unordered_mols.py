@@ -1971,7 +1971,7 @@ def _prepare_atoms_array(
 
 
 # added by Andreas
-def rmsd_from_numpy(
+def rmsd_unordered_from_numpy(
     p_atoms_in: Union[List[str], List[int], np.ndarray],
     p_coord_in: np.ndarray,
     q_atoms_in: Union[List[str], List[int], np.ndarray],
@@ -2201,7 +2201,7 @@ def remove_duplicates(structures, atom_types, rmsd_cutoff: float = 1e-1) -> np.n
             continue
         for j in range(i + 1, B):
             if structures_to_keep_mask[j]:
-                rmsd = rmsd_from_numpy(
+                rmsd = rmsd_unordered_from_numpy(
                     p_atoms_in=np.asarray(atom_types[i], dtype=int),
                     p_coord_in=np.asarray(structures[i], dtype=float),
                     q_atoms_in=np.asarray(atom_types[j], dtype=int),
@@ -2219,7 +2219,7 @@ def print_pairwise_rmsd(structures, atom_types):
     print("\nPairwise RMSDs:")
     for i in range(len(structures)):
         for j in range(i + 1, len(structures)):
-            rmsd_val = rmsd_from_numpy(
+            rmsd_val = rmsd_unordered_from_numpy(
                 p_atoms_in=atom_types[i],
                 p_coord_in=structures[i],
                 q_atoms_in=atom_types[j],
@@ -2669,7 +2669,7 @@ def example_numpy():
     q_coord1 = np.array([[0.5, 0.5, 0.5], [0.5, 0.5, 1.457], [0.5, 1.426, 0.261]])
 
     print("\n--- Example 1: Simple translation (no reordering) ---")
-    rmsd1 = rmsd_from_numpy(p_atoms1, p_coord1, q_atoms1, q_coord1)
+    rmsd1 = rmsd_unordered_from_numpy(p_atoms1, p_coord1, q_atoms1, q_coord1)
     print(f"RMSD (P vs Q, no reorder): {rmsd1:.4f}")
 
     # Example 2: Two water molecules, one with atoms reordered
@@ -2685,7 +2685,7 @@ def example_numpy():
 
     print("\n--- Example 2: Atom order mismatch ---")
     try:
-        rmsd2_fail = rmsd_from_numpy(
+        rmsd2_fail = rmsd_unordered_from_numpy(
             p_atoms1, p_coord1, q_atoms2_reordered, q_coord2_reordered
         )
         print(
@@ -2697,7 +2697,7 @@ def example_numpy():
     print("\n--- Example 3: Atom order mismatch with Hungarian reordering ---")
     # Using atom numbers for Q
     q_atoms2_numbers_reordered = [1, 1, 8]  # H, H, O
-    rmsd2_reorder = rmsd_from_numpy(
+    rmsd2_reorder = rmsd_unordered_from_numpy(
         p_atoms1,
         p_coord1,
         q_atoms2_numbers_reordered,
@@ -2718,7 +2718,7 @@ def example_numpy():
         [[0.0, 0.0, 0.0], [0.0, 0.0, -0.957], [0.0, 0.926, 0.239]]
     )
     print("\n--- Example 4: Reflected coordinates, check reflections (keep stereo) ---")
-    rmsd_reflect = rmsd_from_numpy(
+    rmsd_reflect = rmsd_unordered_from_numpy(
         p_atoms_num,
         p_coord_reflect,
         q_atoms_num,
@@ -2768,7 +2768,7 @@ def example_numpy():
     )
 
     print("\n--- Example 5: Benzene-like structures, reordered and rotated ---")
-    rmsd_benzene_no_reorder = rmsd_from_numpy(
+    rmsd_benzene_no_reorder = rmsd_unordered_from_numpy(
         p_atoms_benzene,
         p_coord_benzene,
         q_atoms_benzene,
@@ -2779,7 +2779,7 @@ def example_numpy():
         f"RMSD (Benzene, no reorder): {rmsd_benzene_no_reorder:.4f} (expected to be high)"
     )
 
-    rmsd_benzene_reorder = rmsd_from_numpy(
+    rmsd_benzene_reorder = rmsd_unordered_from_numpy(
         p_atoms_benzene,
         p_coord_benzene,
         q_atoms_benzene,
@@ -2807,7 +2807,7 @@ def example_numpy():
     q_lj_atoms = np.ones(N_particles, dtype=int)
 
     # Calculate RMSD without reordering (will likely be high due to permutation)
-    rmsd_lj_no_reorder = rmsd_from_numpy(
+    rmsd_lj_no_reorder = rmsd_unordered_from_numpy(
         p_lj_atoms, p_lj_coord, q_lj_atoms, q_lj_coord, reorder=False
     )
     print(
@@ -2815,7 +2815,7 @@ def example_numpy():
     )
 
     # Calculate RMSD with Hungarian reordering (should be low)
-    rmsd_lj_hungarian = rmsd_from_numpy(
+    rmsd_lj_hungarian = rmsd_unordered_from_numpy(
         p_lj_atoms,
         p_lj_coord,
         q_lj_atoms,
@@ -2830,7 +2830,7 @@ def example_numpy():
     # Example using atomic number 0 (ensure not to use inertia-hungarian if 0 is not in ELEMENT_WEIGHTS)
     p_lj_atoms_zero = np.zeros(N_particles, dtype=int)
     q_lj_atoms_zero = np.zeros(N_particles, dtype=int)
-    rmsd_lj_hungarian_zeros = rmsd_from_numpy(
+    rmsd_lj_hungarian_zeros = rmsd_unordered_from_numpy(
         p_lj_atoms_zero,
         p_lj_coord,  # Using coords from above for simplicity
         q_lj_atoms_zero,
@@ -2852,7 +2852,7 @@ def example_numpy():
     q_lj_atoms = np.ones(N_particles, dtype=int)
 
     # Calculate RMSD without reordering (will likely be high due to permutation)
-    rmsd_lj_no_reorder = rmsd_from_numpy(
+    rmsd_lj_no_reorder = rmsd_unordered_from_numpy(
         p_lj_atoms, p_lj_coord, q_lj_atoms, q_lj_coord, reorder=False
     )
     print(
@@ -2860,7 +2860,7 @@ def example_numpy():
     )
 
     # Calculate RMSD with Hungarian reordering (should be low)
-    rmsd_lj_hungarian = rmsd_from_numpy(
+    rmsd_lj_hungarian = rmsd_unordered_from_numpy(
         p_lj_atoms,
         p_lj_coord,
         q_lj_atoms,
@@ -2875,7 +2875,7 @@ def example_numpy():
     # Example using atomic number 0 (ensure not to use inertia-hungarian if 0 is not in ELEMENT_WEIGHTS)
     p_lj_atoms_zero = np.zeros(N_particles, dtype=int)
     q_lj_atoms_zero = np.zeros(N_particles, dtype=int)
-    rmsd_lj_hungarian_zeros = rmsd_from_numpy(
+    rmsd_lj_hungarian_zeros = rmsd_unordered_from_numpy(
         p_lj_atoms_zero,
         p_lj_coord,  # Using coords from above for simplicity
         q_lj_atoms_zero,

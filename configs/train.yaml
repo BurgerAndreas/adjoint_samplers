@@ -14,7 +14,10 @@ clip_grad_norm: false
 checkpoint: null
 save_freq: 100
 
+# how many samples to cluster, more are more accurate but slower to cluster
+num_samples_clustering: 400 
 dbscan:
+  # maximum neighborhood radius. Points within this distance of each other are considered neighbors
   eps: 0.5
   min_samples: 5
 
@@ -27,7 +30,7 @@ timesteps:
 # === hardward related  ===
 resample_batch_size: 512
 train_batch_size: 512
-eval_batch_size: 2000
+eval_batch_size: 1000
 num_eval_samples: ${eval_batch_size}
 
 # === paths  ===
