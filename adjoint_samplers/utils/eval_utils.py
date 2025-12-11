@@ -6,6 +6,7 @@ from tempfile import NamedTemporaryFile
 
 import numpy as np
 import PIL
+import PIL.ImageDraw
 import pymol
 from pymol import cmd
 import seaborn as sns
@@ -21,6 +22,8 @@ def _init_pymol():
     global _pymol_initialized
     if not _pymol_initialized:
         pymol.finish_launching(["pymol", "-c", "-q"])
+        # Silence command echoing (e.g., "PyMOL>viewport ...") on stdout.
+        cmd.feedback("disable", "all", "actions")
         _pymol_initialized = True
 
 
@@ -45,6 +48,35 @@ def _apply_pastel_colors():
     for elem, rgb in element_colors.items():
         cmd.set_color(f"elem_{elem}", rgb)
         cmd.color(f"elem_{elem}", f"elem {elem}")
+
+
+def _add_distance_labels(obj_name="mol", cutoff=3.5, max_pairs=10):
+    """Draw distance labels between nearby atom pairs to avoid clutter."""
+    model = cmd.get_model(obj_name)
+    atoms = model.atom
+    n = len(atoms)
+    if n == 0:
+        return
+
+    pairs = []
+    for i in range(n):
+        ai = atoms[i]
+        for j in range(i + 1, n):
+            aj = atoms[j]
+            dx = ai.coord[0] - aj.coord[0]
+            dy = ai.coord[1] - aj.coord[1]
+            dz = ai.coord[2] - aj.coord[2]
+            dist = (dx * dx + dy * dy + dz * dz) ** 0.5
+            if dist <= cutoff:
+                pairs.append((dist, i + 1, j + 1))
+    pairs.sort(key=lambda t: t[0])
+    for k, (_, i_idx, j_idx) in enumerate(pairs[:max_pairs]):
+        dist_name = f"dist_{i_idx}_{j_idx}"
+        cmd.distance(dist_name, f"{obj_name} and index {i_idx}", f"{obj_name} and index {j_idx}")
+        cmd.show("labels", dist_name)
+        cmd.set("label_size", 16, dist_name)
+        cmd.set("dash_width", 2, dist_name)
+        cmd.set("dash_color", "black", dist_name)
 
 
 def get_fig_axes(ncol, nrow=1, ax_length_in=2.0):
@@ -186,11 +218,12 @@ def render_xyz_to_png(xyz_str, width=300, height=300):
     cmd.set("stick_quality", 20)
     cmd.set("sphere_scale", 0.3)
     _apply_pastel_colors()
+    _add_distance_labels("mol")
     # cmd.set("orthoscopic", 1)
     # cmd.set("ray_shadows", 0)
     # cmd.set("ray_shadow", 0)
     cmd.set("ray_opaque_background", 1)
-    cmd.zoom("mol", buffer=0)
+    cmd.zoom("mol", buffer=0.5)
     cmd.refresh()
 
     with NamedTemporaryFile(delete=False, suffix=".png") as png_tmp:
@@ -237,11 +270,12 @@ def render_xyz_grid(xyz_strings, ncols=3, width=900, height=900):
         cmd.set("stick_quality", 20)
         cmd.set("sphere_scale", 0.3)
         _apply_pastel_colors()
+        _add_distance_labels(mol_name)
         cmd.set("orthoscopic", 1)
         cmd.set("ray_shadows", 0)
         cmd.set("ray_shadow", 0)
         cmd.set("ray_opaque_background", 1)
-        cmd.zoom(mol_name, buffer=0)
+        cmd.zoom(mol_name, buffer=0.5)
         cmd.refresh()
 
         with NamedTemporaryFile(delete=False, suffix=".png") as png_tmp:
@@ -263,6 +297,16 @@ def render_xyz_grid(xyz_strings, ncols=3, width=900, height=900):
         png_path.unlink(missing_ok=True)
 
     grid = PIL.Image.new("RGB", (cell_w * ncols, cell_h * ncols), color=(255, 255, 255))
+    # Draw thin separators between tiles for clarity.
+    draw = PIL.ImageDraw.Draw(grid)
+    line_color = (200, 200, 200)
+    for c in range(1, ncols):
+        x = c * cell_w
+        draw.line([(x, 0), (x, cell_h * ncols)], fill=line_color, width=1)
+    for r in range(1, ncols):
+        y = r * cell_h
+        draw.line([(0, y), (cell_w * ncols, y)], fill=line_color, width=1)
+
     for idx, img in enumerate(imgs):
         r, c = divmod(idx, ncols)
         grid.paste(img, (c * cell_w, r * cell_h))

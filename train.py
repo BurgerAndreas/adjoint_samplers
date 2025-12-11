@@ -354,11 +354,6 @@ def main(cfg):
                         if num_clusters > 0:
                             print(f"Rendering {num_clusters} medoid representatives...")
                             medoid_xyz = []
-                            freq_minima = 0
-                            freq_ts = 0
-                            freq_other = 0
-                            freq_failed = 0
-                            freq_samples = 0
                             for idx in medoid_indices_ordered:
                                 pos = (
                                     samples[idx]
@@ -376,27 +371,7 @@ def main(cfg):
                                     pos, atom_type="C", center=True
                                 )
                                 medoid_xyz.append(xyz)
-                                if energy.n_spatial_dim == 3:
-                                    atoms = ["x"] * energy.n_particles
-                                    hess = energy.hessian_E(
-                                        samples[idx : idx + 1]
-                                    ).detach()[0]
-                                    freq = analyze_frequencies_torch(
-                                        hessian=hess,
-                                        cart_coords=samples[idx],
-                                        atomsymbols=atoms,
-                                    )
-                                    neg_num = int(freq["neg_num"])
-                                    freq_samples += 1
-                                    if neg_num == 0:
-                                        freq_minima += 1
-                                    elif neg_num == 1:
-                                        freq_ts += 1
-                                    else:
-                                        freq_other += 1
-                                else:
-                                    freq_failed += 1
-
+                                
                             # Render first 3 medoids individually
                             for i, xyz_str in enumerate(medoid_xyz[:3]):
                                 png_bytes = render_xyz_to_png(
@@ -410,6 +385,7 @@ def main(cfg):
                                 print(f"Saved medoid {i} to {fname.resolve()}")
                                 eval_dict[f"medoid_{i}"] = wandb.Image(medoid_img)
 
+                            # render medoid grid of up to 9 medoids
                             if len(medoid_xyz) == 0:
                                 print(
                                     "Warning: medoid_xyz is empty, skipping grid rendering"
@@ -431,32 +407,66 @@ def main(cfg):
                                 eval_dict["dbscan_medoid_grid"] = wandb.Image(
                                     medoid_grid_img
                                 )
-                            if freq_samples > 0:
-                                eval_dict["freq_minima"] = freq_minima
-                                eval_dict["freq_transition_states"] = freq_ts
-                                eval_dict["freq_other"] = freq_other
-                                eval_dict["freq_failed"] = freq_failed
-                                denom = freq_minima if freq_minima > 0 else 1
-                                eval_dict["freq_ts_over_min_ratio"] = freq_ts / denom
-                                eval_dict["freq_total_samples"] = freq_samples
-                            elif freq_failed > 0:
-                                eval_dict["freq_failed"] = freq_failed
-
+                                
+                            # frequency analysis
+                            freq_minima = 0
+                            freq_ts = 0
+                            freq_other = 0
+                            freq_samples = 0
+                            if energy.n_spatial_dim in (2, 3):
+                                for idx in medoid_indices_ordered:
+                                    atoms = ["x"] * energy.n_particles
+                                    hess = energy.hessian_E(
+                                        samples[idx : idx + 1]
+                                    ).detach()[0]
+                                    if energy.n_spatial_dim == 3:
+                                        freq = analyze_frequencies_torch(
+                                            hessian=hess,
+                                            cart_coords=samples[idx],
+                                            atomsymbols=atoms,
+                                            ev_thresh=-1e-6,
+                                        )
+                                        neg_num = int(freq["neg_num"])
+                                    elif energy.n_spatial_dim == 2:
+                                        h_flat = hess.reshape(
+                                            samples[idx].numel(), samples[idx].numel()
+                                        )
+                                        h_flat = (h_flat + h_flat.T) / 2.0
+                                        eigvals = torch.linalg.eigvalsh(h_flat)
+                                        neg_num = int((eigvals < -1e-6).sum().item())
+                                    freq_samples += 1
+                                    if neg_num == 0:
+                                        freq_minima += 1
+                                    elif neg_num == 1:
+                                        freq_ts += 1
+                                    else:
+                                        freq_other += 1
+                                if freq_samples > 0:
+                                    eval_dict["freq_minima"] = freq_minima
+                                    eval_dict["freq_transition_states"] = freq_ts
+                                    eval_dict["freq_other"] = freq_other
+                                    denom = freq_minima if freq_minima > 0 else 1
+                                    eval_dict["freq_ts_over_min_ratio"] = freq_ts / denom
+                                    eval_dict["freq_total_samples"] = freq_samples
+                            else:
+                                print(f"Warning: energy.n_spatial_dim is {energy.n_spatial_dim}, skipping frequency analysis")
+                                
                         else:
                             print("No clusters found")
 
                     writer.log(eval_dict, step=epoch)
 
-                print("Saving checkpoint ... ")
-                train_utils.save(
-                    epoch,
-                    cfg,
-                    optimizer,
-                    controller,
-                    adjoint_matcher,
-                    corrector=corrector,
-                    corrector_matcher=corrector_matcher,
-                )
+                if cfg.save_ckpt:
+                    print("Saving checkpoint ... ")
+                    train_utils.save(
+                        epoch,
+                        cfg,
+                        optimizer,
+                        controller,
+                        adjoint_matcher,
+                        corrector=corrector,
+                        corrector_matcher=corrector_matcher,
+                    )
 
     except Exception as e:
         # This way we have the full traceback in the log.  otherwise Hydra
