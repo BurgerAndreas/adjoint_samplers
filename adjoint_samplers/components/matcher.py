@@ -254,6 +254,7 @@ class CorrectorMatcher(Matcher):
         x0: torch.Tensor,
         timesteps: torch.Tensor,
         is_asbs_init_stage: bool,
+        beta: float = 1.0,
     ):
         # IPF init: First Corrector Matching stage
         # of ASBS uses zero controller (i.e., ref_sde)

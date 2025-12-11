@@ -206,7 +206,7 @@ class Writer:
                 mode="online" if cfg.use_wandb else "disabled",
                 project=cfg.project,
                 name=name,
-                config=dict(cfg),
+                config=OmegaConf.to_container(cfg, resolve=True),
             )
         else:
             self.writer = None

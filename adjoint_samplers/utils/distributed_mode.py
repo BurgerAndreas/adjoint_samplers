@@ -82,7 +82,7 @@ def init_distributed_mode(cfg):
         elif (
             "SLURM_PROCID" in os.environ and os.environ["SLURM_JOB_NAME"] != "bash"
         ):  # Exclude interactive shells
-            cfg.rank = int(os.environ["SLURM_PROCID"])
+            cfg.rank = int(os.environ.get("SLURM_PROCID", 0))
             cfg.world_size = int(os.environ.get("SLURM_GPUS_PER_NODE", 1)) * int(
                 os.environ.get("SLURM_JOB_NUM_NODES", 1)
             )
