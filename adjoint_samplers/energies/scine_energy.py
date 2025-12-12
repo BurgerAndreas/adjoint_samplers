@@ -122,6 +122,18 @@ def _parse_molecule_formula(molecule: str) -> List[str]:
     return elements
 
 
+def count_atoms_in_molecule(molecule: str) -> int:
+    """Count the number of atoms in a molecule formula string.
+
+    Args:
+        molecule: Molecule formula string (e.g., "c3h4", "h2o", "ch4")
+
+    Returns:
+        Number of atoms in the molecule
+    """
+    return len(_parse_molecule_formula(molecule))
+
+
 def _convert_elements(
     elements: Union[List[scine_utilities.ElementType], List[str], List[int], str],
 ) -> List[scine_utilities.ElementType]:

@@ -4,6 +4,7 @@ from re import T
 import sys
 import traceback
 import hydra
+from omegaconf import OmegaConf
 import numpy as np
 import termcolor
 from sklearn.cluster import DBSCAN
@@ -36,9 +37,20 @@ from adjoint_samplers.utils.align_unordered_mols import (
     rmsd_unordered_from_numpy,
 )
 from adjoint_samplers.utils.logging_utils import name_from_config
+from adjoint_samplers.energies.scine_energy import count_atoms_in_molecule
 
 
 cudnn.benchmark = True
+
+# Register Hydra resolvers for molecule-based configs
+OmegaConf.register_new_resolver(
+    "molecule_n_particles",
+    lambda molecule: count_atoms_in_molecule(molecule),
+)
+OmegaConf.register_new_resolver(
+    "molecule_dim",
+    lambda molecule: count_atoms_in_molecule(molecule) * 3,
+)
 
 
 def red(content):
