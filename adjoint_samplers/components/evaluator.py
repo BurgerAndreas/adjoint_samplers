@@ -132,7 +132,7 @@ class NullEvaluator:
     is handled directly in train.py (clustering, frequency analysis, etc.).
     """
 
-    def __init__(self, energy) -> None:
+    def __init__(self, energy, **kwargs) -> None:
         self.energy = energy
 
     def __call__(self, samples: torch.Tensor) -> Dict:

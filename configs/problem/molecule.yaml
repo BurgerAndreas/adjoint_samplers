@@ -4,9 +4,10 @@
 # Default: C3H4 (cyclopropene) - 7 atoms
 molecule: c3h4  # C3H4 cyclopropene - auto-parsed to elements
 
-# dim and n_particles are automatically computed from molecule
-dim: ${molecule_dim:${molecule}}
-n_particles: ${molecule_n_particles:${molecule}}
+# dim and n_particles are automatically computed from energy.molecule
+# This allows overrides like energy.molecule=h1c1n1 to automatically update dim and n_particles
+dim: ${molecule_dim:${energy.molecule}}
+n_particles: ${molecule_n_particles:${energy.molecule}}
 spatial_dim: 3
 
 energy:

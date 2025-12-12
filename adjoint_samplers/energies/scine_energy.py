@@ -134,6 +134,42 @@ def count_atoms_in_molecule(molecule: str) -> int:
     return len(_parse_molecule_formula(molecule))
 
 
+def element_type_to_symbol(element_type: scine_utilities.ElementType) -> str:
+    """Convert scine_utilities.ElementType to element symbol string.
+
+    Args:
+        element_type: ElementType enum value
+
+    Returns:
+        Element symbol string (e.g., "C", "H", "N", "O")
+    """
+    type_to_symbol = {
+        scine_utilities.ElementType.H: "H",
+        scine_utilities.ElementType.He: "He",
+        scine_utilities.ElementType.Li: "Li",
+        scine_utilities.ElementType.Be: "Be",
+        scine_utilities.ElementType.B: "B",
+        scine_utilities.ElementType.C: "C",
+        scine_utilities.ElementType.N: "N",
+        scine_utilities.ElementType.O: "O",
+        scine_utilities.ElementType.F: "F",
+        scine_utilities.ElementType.Ne: "Ne",
+        scine_utilities.ElementType.Na: "Na",
+        scine_utilities.ElementType.Mg: "Mg",
+        scine_utilities.ElementType.Al: "Al",
+        scine_utilities.ElementType.Si: "Si",
+        scine_utilities.ElementType.P: "P",
+        scine_utilities.ElementType.S: "S",
+        scine_utilities.ElementType.Cl: "Cl",
+        scine_utilities.ElementType.Ar: "Ar",
+        scine_utilities.ElementType.K: "K",
+        scine_utilities.ElementType.Ca: "Ca",
+    }
+    if element_type not in type_to_symbol:
+        raise ValueError(f"Unsupported ElementType: {element_type}")
+    return type_to_symbol[element_type]
+
+
 def _convert_elements(
     elements: Union[List[scine_utilities.ElementType], List[str], List[int], str],
 ) -> List[scine_utilities.ElementType]:
