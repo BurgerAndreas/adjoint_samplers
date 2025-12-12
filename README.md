@@ -20,12 +20,7 @@ For improved ASBS with chemically-sounded exploration (WT-ASBS), please check [h
 uv venv .venv --python 3.11
 source .venv/bin/activate
 
-uv pip install torch==2.7.0 --index-url https://download.pytorch.org/whl/cu126
-uv pip install torch-scatter -f https://data.pyg.org/whl/torch-2.7.0+cu126.html
-uv pip install torch-cluster -f https://data.pyg.org/whl/torch-2.7.0+cu126.html
-uv pip install torch-geometric
-
-uv pip install -r requirements.txt # --no-cache 
+# uv run train.py experiment=dw4_asbs
 ```
 
 ## Run overview
@@ -53,8 +48,9 @@ bash scripts/download.sh
 Training scripts to generate similar results in the papers can be found under
 [`scripts`](https://github.com/facebookresearch/adjoint_samplers/blob/main/scripts).
 Checkpoints and figures are saved under the folder `results`.
-```
-python train.py experiment={dw4,lj13,lj55}_{asbs,as} seed=0,1,2 -m
+```bash
+# energy.gad=True
+uv run train.py experiment={dw4,lj13,lj55}_{asbs,as} seed=0,1,2 -m
 ```
 
 

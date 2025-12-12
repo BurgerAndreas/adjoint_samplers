@@ -51,6 +51,8 @@ dependencies = [
     "lmdb==1.5.1",
     "h5py>=3.10.0",
     "bgflow @ git+https://github.com/atong01/bgflow",
+    "scine-utilities",
+    "scine-sparrow",
 ]
 
 [tool.hatch.metadata]

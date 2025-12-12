@@ -123,3 +123,17 @@ class SyntheticEenergyEvaluator:
             eval_dict["eq_w2"] = eq_w2
 
         return eval_dict
+
+
+class NullEvaluator:
+    """A simple evaluator that works with any energy type.
+
+    Returns an empty dict since evaluation logic for molecules
+    is handled directly in train.py (clustering, frequency analysis, etc.).
+    """
+
+    def __init__(self, energy) -> None:
+        self.energy = energy
+
+    def __call__(self, samples: torch.Tensor) -> Dict:
+        return {}

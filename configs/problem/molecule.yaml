@@ -1,0 +1,18 @@
+# @package _global_
+
+# Molecule configuration for ScineEnergy
+# Default: C3H4 (cyclopropene) - 7 atoms
+dim: 21  # 7 atoms * 3 spatial dimensions
+n_particles: 7
+spatial_dim: 3
+
+energy:
+  _target_: adjoint_samplers.energies.scine_energy.ScineEnergy
+  molecule: c3h4  # C3H4 cyclopropene - auto-parsed to elements
+  functional: DFTB0 # DFTB0, MNDO, AM1, RM1, PM6
+  n_jobs: 10
+  gad: false
+
+evaluator:
+  _target_: adjoint_samplers.components.evaluator.NullEvaluator
+

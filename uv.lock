@@ -52,6 +52,8 @@ dependencies = [
     { name = "rdkit" },
     { name = "ruff" },
     { name = "scikit-learn" },
+    { name = "scine-sparrow" },
+    { name = "scine-utilities" },
     { name = "seaborn" },
     { name = "submitit" },
     { name = "termcolor" },
@@ -103,6 +105,8 @@ requires-dist = [
     { name = "rdkit", specifier = "==2025.9.1" },
     { name = "ruff" },
     { name = "scikit-learn" },
+    { name = "scine-sparrow" },
+    { name = "scine-utilities" },
     { name = "seaborn" },
     { name = "submitit" },
     { name = "termcolor" },
@@ -3561,6 +3565,31 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/60/18/4a52c635c71b536879f4b971c2cedf32c35ee78f48367885ed8025d1f7ee/scikit_learn-1.7.2-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:9656e4a53e54578ad10a434dc1f993330568cfee176dff07112b8785fb413106", size = 9426236, upload-time = "2025-09-09T08:21:22.645Z" },
     { url = "https://files.pythonhosted.org/packages/99/7e/290362f6ab582128c53445458a5befd471ed1ea37953d5bcf80604619250/scikit_learn-1.7.2-cp314-cp314-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:96dc05a854add0e50d3f47a1ef21a10a595016da5b007c7d9cd9d0bffd1fcc61", size = 9312593, upload-time = "2025-09-09T08:21:24.65Z" },
     { url = "https://files.pythonhosted.org/packages/8e/87/24f541b6d62b1794939ae6422f8023703bbf6900378b2b34e0b4384dfefd/scikit_learn-1.7.2-cp314-cp314-win_amd64.whl", hash = "sha256:bb24510ed3f9f61476181e4db51ce801e2ba37541def12dc9333b946fc7a9cf8", size = 8820007, upload-time = "2025-09-09T08:21:26.713Z" },
+]
+
+[[package]]
+name = "scine-sparrow"
+version = "5.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "scine-utilities" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/02/bf/790742110c69180fce137b2c17781a3867a30c409198d6ccce5d914213bb/scine_sparrow-5.2.0-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:33a0a131860037d7a9e7405777ccba8eb2a8a982690076cd7663f3d13ff35579", size = 27689017, upload-time = "2025-10-09T06:33:27.249Z" },
+    { url = "https://files.pythonhosted.org/packages/e3/8e/e2c65cfc42cf6afe7767a7fbbb38b42a5a7278b5742f6a38bc5351aeba61/scine_sparrow-5.2.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:eaff3dda25abf515ce8faf8eff65ff34cb34710995b33ff7cf547fa5003cdc84", size = 27689018, upload-time = "2025-10-09T06:33:30.97Z" },
+]
+
+[[package]]
+name = "scine-utilities"
+version = "10.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "scipy" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/df/85/0b84b46265f1574b9c09365e371bcb8a42834fe4fd169d81af799d643381/scine_utilities-10.1.0-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:6d1f86bfc8ce1fdf4b6e204c2e69dc8eb305230fa9f6f1af0e5bdecc2a3a847c", size = 5155849, upload-time = "2025-10-09T06:33:54.241Z" },
+    { url = "https://files.pythonhosted.org/packages/00/c8/231382136f0730a9c03623fdc14ebc618274b839b3e3ef50febc86051383/scine_utilities-10.1.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:0cf7a415e1e68f2ee440ce122a649be6706a380166af9378793fb72c9687eb5f", size = 5158687, upload-time = "2025-10-09T06:33:56.524Z" },
 ]
 
 [[package]]

@@ -1,7 +1,7 @@
 # @package _global_
 
 defaults:
-  - /problem: dw4
+  - /problem: molecule
   - /source: harmonic # meanfree
   - /sde@ref_sde: graph_ve
   - /model@controller: egnn
@@ -11,7 +11,14 @@ defaults:
   - /model@corrector: egnn
   - /matcher@corrector_matcher: corrector
 
-exp_name: dw4_asbs
+exp_name: c3h4_asbs
+
+# === molecule configuration ===
+molecule: c3h4
+
+# Override energy molecule parameter
+energy:
+  molecule: ${molecule}
 
 # === source ===
 scale: 2
@@ -53,7 +60,8 @@ corrector_matcher:
 use_wandb: true
 
 # plotting axis limits
-energy_min: -60
-energy_max: 10
-dist_min: 0
-dist_max: 10
+energy_min: null
+energy_max: null
+dist_min: null
+dist_max: null
+

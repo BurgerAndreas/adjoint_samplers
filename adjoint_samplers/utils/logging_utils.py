@@ -22,6 +22,10 @@ REPLACE = {
     "experiment=": "",
     "experiment": "",
     "temperature.": "t",
+    "schedule": "",
+    "linear": "lin",
+    "decay_start_epoch": "start",
+    "beta_": "b",
 }
 
 REPLACE_HUMAN = {}
