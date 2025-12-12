@@ -74,9 +74,19 @@ class DoubleWellEnergy(BaseEnergy):
     def eval(self, samples: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
         return self.multi_double_well._energy(samples).squeeze(-1) * beta
 
-    def grad_E(self, samples: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
-        """Override to use analytical gradient implementation."""
+    def _grad_E(self, samples: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
+        """Internal method to compute standard gradients analytically."""
         return self.gradient_analytic(samples) * beta
+
+    def grad_E(self, samples: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
+        """Compute gradients for batch of samples.
+
+        If GAD is enabled, computes GAD vector field instead of standard gradient.
+        Otherwise uses analytical gradient implementation.
+        """
+        if self.gad:
+            return self._grad_E_gad(samples, beta=beta)
+        return self._grad_E(samples, beta=beta)
 
     def hessian_E(self, samples: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
         """Override to use analytical Hessian implementation."""
