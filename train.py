@@ -35,6 +35,7 @@ from adjoint_samplers.utils.align_unordered_mols import (
     REORDER_HUNGARIAN,
     rmsd_unordered_from_numpy,
 )
+from adjoint_samplers.utils.logging_utils import name_from_config
 
 
 cudnn.benchmark = True
@@ -400,8 +401,9 @@ def main(cfg):
                 )
 
         print("Instantiating writer...")
+        run_name = name_from_config(cfg)
         writer = train_utils.Writer(
-            name=cfg.exp_name,
+            name=run_name,  # cfg.exp_name
             cfg=cfg,
             is_main_process=distributed_mode.is_main_process(),
         )
@@ -417,6 +419,15 @@ def main(cfg):
         for epoch in range(start_epoch, cfg.num_epochs):
             stage = train_utils.determine_stage(epoch, cfg)
             global_batch_start = epoch * cfg.train_itr_per_epoch
+            end_batch_idx = min(
+                global_batch_start + cfg.train_itr_per_epoch - 1, total_batches - 1
+            )
+            beta_epoch = train_utils.get_beta(
+                cfg.temperature,
+                end_batch_idx,
+                total_batches,
+                cfg.train_itr_per_epoch,
+            )
 
             matcher, model = {
                 "adjoint": (adjoint_matcher, controller),
@@ -440,6 +451,8 @@ def main(cfg):
                 {
                     f"{stage}_loss": loss,
                     f"{stage}_buffer_size": len(matcher.buffer),
+                    "beta": beta_epoch,
+                    "epoch": epoch,
                 },
                 step=epoch,
             )
@@ -462,12 +475,11 @@ def main(cfg):
             if distributed_mode.is_main_process() and eval_this_epoch:
                 # eval only after adjoint training
                 if stage == "adjoint":
-                    eval_batch_idx = min(
-                        global_batch_start + cfg.train_itr_per_epoch - 1,
-                        total_batches - 1,
-                    )
                     beta_eval = train_utils.get_beta(
-                        cfg.temperature, eval_batch_idx, total_batches
+                        cfg.temperature,
+                        end_batch_idx,
+                        total_batches,
+                        cfg.train_itr_per_epoch,
                     )
                     n_gen_samples = 0
                     x1_list = []
@@ -524,6 +536,18 @@ def main(cfg):
                     axes[0].set_ylabel("Density")
                     axes[0].set_title(f"Energy Distribution (epoch {epoch})")
                     axes[0].grid(True)
+                    if cfg.energy_min is not None or cfg.energy_max is not None:
+                        emin = (
+                            cfg.energy_min
+                            if cfg.energy_min is not None
+                            else axes[0].get_xlim()[0]
+                        )
+                        emax = (
+                            cfg.energy_max
+                            if cfg.energy_max is not None
+                            else axes[0].get_xlim()[1]
+                        )
+                        axes[0].set_xlim(emin, emax)
 
                     # Interatomic distance histogram (if applicable)
                     if hasattr(energy, "n_particles") and hasattr(
@@ -540,6 +564,18 @@ def main(cfg):
                             f"Interatomic Distance Distribution (epoch {epoch})"
                         )
                         axes[1].grid(True)
+                        if cfg.dist_min is not None or cfg.dist_max is not None:
+                            dmin = (
+                                cfg.dist_min
+                                if cfg.dist_min is not None
+                                else axes[1].get_xlim()[0]
+                            )
+                            dmax = (
+                                cfg.dist_max
+                                if cfg.dist_max is not None
+                                else axes[1].get_xlim()[1]
+                            )
+                            axes[1].set_xlim(dmin, dmax)
 
                     else:
                         axes[1].text(

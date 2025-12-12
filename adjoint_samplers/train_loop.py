@@ -36,7 +36,10 @@ def train_one_epoch(
 
     is_asbs_init_stage = train_utils.is_asbs_init_stage(epoch, cfg)
     beta_buffer = train_utils.get_beta(
-        cfg.temperature, global_batch_start, total_batches
+        cfg.temperature,
+        global_batch_start,
+        total_batches,
+        cfg.train_itr_per_epoch,
     )
 
     for _ in range(M):

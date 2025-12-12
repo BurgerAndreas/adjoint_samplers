@@ -72,7 +72,10 @@ def get_timesteps(
 
 
 def get_beta(
-    schedule_cfg: DictConfig, global_batch_idx: int, total_batches: int
+    schedule_cfg: DictConfig,
+    global_batch_idx: int,
+    total_batches: int,
+    batches_per_epoch: int,
 ) -> float:
     """
     Return beta for the current global batch index.
@@ -83,14 +86,23 @@ def get_beta(
     """
     mode = getattr(schedule_cfg, "schedule", "constant")
     beta_start = float(getattr(schedule_cfg, "beta_start", 1.0))
+    decay_start_epoch = int(getattr(schedule_cfg, "decay_start_epoch", 0))
+    decay_start_batch = max(decay_start_epoch, 0) * int(batches_per_epoch)
+
+    # constant before decay start
+    if global_batch_idx < decay_start_batch:
+        return beta_start
+
     if mode == "constant":
         return beta_start
 
     if mode == "linear":
         beta_end = float(getattr(schedule_cfg, "beta_end", beta_start))
-        if total_batches <= 1:
+        if total_batches <= decay_start_batch + 1:
             return beta_end
-        frac = min(max(global_batch_idx / float(total_batches - 1), 0.0), 1.0)
+        effective_idx = global_batch_idx - decay_start_batch
+        decay_span = max(total_batches - decay_start_batch - 1, 1)
+        frac = min(max(effective_idx / float(decay_span), 0.0), 1.0)
         return beta_start + (beta_end - beta_start) * frac
 
     raise ValueError(f"Unknown temperature schedule: {mode}")

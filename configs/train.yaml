@@ -21,6 +21,12 @@ dbscan:
   eps: 0.5
   min_samples: 5
 
+# optional axis limits for plotting
+energy_min: null
+energy_max: null
+dist_min: null
+dist_max: null
+
 timesteps:
   t0: 0.0
   t1: 1.0
@@ -38,6 +44,7 @@ temperature:
   schedule: constant  # options: constant, linear
   beta_start: 1.0     # used for constant and linear
   beta_end: 1.0       # used for linear decay over total batches
+  decay_start_epoch: 0  # linear decay begins after this epoch (0-based)
 
 # === paths  ===
 # dataset:
