@@ -153,7 +153,17 @@ class CenteredParticlesHarmonic(distributions.Distribution):
         A = -0.5 * torch.ones(n_particles, n_particles)
         A[torch.arange(n_particles), torch.arange(n_particles)] = 1.0
         B = torch.eye(spatial_dim)
-        return torch.kron(A, B).inverse()
+        M = torch.kron(A, B)
+        try:
+            return M.inverse()
+        except RuntimeError:
+            import warnings
+            warnings.warn(
+                f"Matrix is singular for n_particles={n_particles}, spatial_dim={spatial_dim}. "
+                "Using pseudoinverse instead.",
+                UserWarning,
+            )
+            return torch.linalg.pinv(M)
 
     def _decompose_svd(self, cov):
         """return the rank of cov and A where `cov = UΣV = AA^T`"""

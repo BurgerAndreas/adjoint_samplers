@@ -71,3 +71,7 @@ save_ckpt: true
 
 # Stores the command line arguments overrides
 override_dirname: ${hydra:job.override_dirname}
+
+hydra:
+  job:
+    chdir: false
