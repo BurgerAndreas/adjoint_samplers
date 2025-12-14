@@ -14,11 +14,16 @@ clip_grad_norm: false
 checkpoint: null
 save_freq: 100
 
-# how many samples to cluster, more are more accurate but slower to cluster
-num_samples_clustering: 400 
-dbscan:
-  # maximum neighborhood radius. Points within this distance of each other are considered neighbors
-  eps: 0.5
+# how many samples to cluster, null means use all samples. More are more accurate but slower to cluster
+num_samples_clustering: null
+# whether to perform clustering by pairwise RMSD (can be slow for large sample sets)
+cluster_by_rmsd: false
+# whether to perform clustering by MBTR (Many-Body Tensor Representation) descriptors (can be slow for large sample sets)
+cluster_by_mbtr: false
+# maximum number of samples to use for 2D projection (t-SNE/UMAP) for performance
+max_samples_projection: 5000
+hdbscan:
+  # minimum cluster size for HDBSCAN clustering
   min_samples: 5
 
 # optional axis limits for plotting

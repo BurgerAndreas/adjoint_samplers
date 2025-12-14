@@ -5,8 +5,11 @@ description = "Adjoint-based diffusion samplers for energy-based Boltzmann distr
 requires-python = ">=3.11"
 dependencies = [
     "scikit-learn",
+    "hdbscan",
+    "umap-learn",
     "pandas",
     "ase",
+    "dscribe",
     "pyscf",
     "openbabel-wheel",
     "openmm",

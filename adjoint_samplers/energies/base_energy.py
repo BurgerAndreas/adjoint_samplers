@@ -63,20 +63,20 @@ class BaseEnergy:
     def hessian_E(self, x: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
         return self._hessian_E(x, beta=beta)
 
-    # GAD vector field: ẋ = -∇V(x) + 2⟨∇V, v₁(x)⟩v₁(x)
+    # GAD vector field: ẋ = -∇V(x) + 2⟨∇V, v1(x)⟩v1(x)
     def _grad_E_gad(self, x: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
         """Compute GAD vector field instead of standard gradient.
 
-        GAD formula: -∇V(x) + 2⟨∇V, v₁(x)⟩v₁(x)
-        where v₁(x) is the eigenvector of the Hessian with smallest eigenvalue.
+        GAD formula: -∇V(x) + 2⟨∇V, v1(x)⟩v1(x)
+        where v1(x) is the eigenvector of the Hessian with smallest eigenvalue.
         """
         batch_size = x.shape[0]
 
         # Compute standard gradient ∇V
-        grad_V = self._grad_E(x, beta=beta)
+        grad_V = self._grad_E(x)
 
         # Compute Hessian H
-        H = self.hessian_E(x, beta=beta)
+        H = self.hessian_E(x)
 
         # Compute GAD for each sample in batch
         gad_vectors = []
@@ -84,17 +84,19 @@ class BaseEnergy:
             # Eigendecomposition of Hessian for sample i
             eigenvals, eigenvecs = torch.linalg.eigh(H[i])
 
-            # v₁ is the eigenvector with smallest eigenvalue (first column)
+            # v1 is the eigenvector with smallest eigenvalue (first column)
             v1 = eigenvecs[:, 0]
 
             # ∇V for this sample
             grad_V_i = grad_V[i]
 
-            # Compute ⟨∇V, v₁⟩
+            # Compute ⟨∇V, v1⟩
             inner_product = torch.dot(grad_V_i, v1)
 
-            # GAD: -∇V + 2⟨∇V, v₁⟩v₁
+            # GAD: -∇V + 2⟨∇V, v1⟩v1
             gad_i = -grad_V_i + 2 * inner_product * v1
+            # GAD is a "force", we need the "gradient"
+            gad_i = -gad_i * beta
             gad_vectors.append(gad_i)
 
         return torch.stack(gad_vectors, dim=0)

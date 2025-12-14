@@ -1,6 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
-from re import T
+import os
 import sys
 import traceback
 import hydra
@@ -30,9 +30,11 @@ from adjoint_samplers.utils.eval_utils import (
     render_xyz_to_png,
     cluster_sorted_distances,
     cluster_rmsd,
+    cluster_mbtr,
     run_frequency_analysis,
     _get_atom_types_from_energy,
     plot_energy_distance_hist,
+    plot_2d_projection,
 )
 from adjoint_samplers.utils.logging_utils import name_from_config
 from adjoint_samplers.energies.scine_energy import (
@@ -182,6 +184,11 @@ def main(cfg):
                     corrector, device_ids=[cfg.gpu], find_unused_parameters=True
                 )
 
+        # Add SLURM job ID to config if it exists in environment
+        if "SLURM_JOB_ID" in os.environ:
+            cfg.slurm_job_id = os.environ["SLURM_JOB_ID"]
+        print(f"SLURM job ID: {cfg.slurm_job_id}")
+
         print("Instantiating writer...")
         run_name = name_from_config(cfg)
         writer = train_utils.Writer(
@@ -325,29 +332,73 @@ def main(cfg):
                     if hasattr(energy, "n_particles") and hasattr(
                         energy, "n_spatial_dim"
                     ):
-                        cluster_samples = samples[: cfg.num_samples_clustering]
+                        if cfg.num_samples_clustering is None:
+                            cluster_samples = samples
+                        else:
+                            cluster_samples = samples[: cfg.num_samples_clustering]
                         distances_cluster = interatomic_dist(
                             cluster_samples, energy.n_particles, energy.n_spatial_dim
                         ).detach()
 
-                        medoid_indices_sorted = cluster_sorted_distances(
-                            distances_cluster,
+                        medoid_indices_sorted, cluster_labels_sorted = (
+                            cluster_sorted_distances(
+                                distances_cluster,
+                                cluster_samples,
+                                energy,
+                                cfg,
+                                eval_dir,
+                                eval_dict,
+                                tag="sorted",
+                            )
+                        )
+
+                        # Plot 2D projections
+                        max_samples_proj = getattr(cfg, "max_samples_projection", 5000)
+                        plot_2d_projection(
                             cluster_samples,
                             energy,
-                            cfg,
                             eval_dir,
                             eval_dict,
                             tag="sorted",
+                            cluster_labels=cluster_labels_sorted,
+                            n_samples_max=max_samples_proj,
                         )
 
-                        medoid_indices_ordered_rmsd = cluster_rmsd(
-                            cluster_samples,
-                            energy,
-                            cfg,
-                            eval_dir,
-                            eval_dict,
-                            tag="rmsd",
-                        )
+                        if getattr(cfg, "cluster_by_rmsd", False):
+                            medoid_indices_ordered_rmsd = cluster_rmsd(
+                                cluster_samples,
+                                energy,
+                                cfg,
+                                eval_dir,
+                                eval_dict,
+                                tag="rmsd",
+                            )
+                            run_frequency_analysis(
+                                medoid_indices_ordered_rmsd,
+                                cluster_samples,
+                                energy,
+                                eval_dict,
+                                tag="rmsd",
+                                beta=beta_eval,
+                            )
+
+                        if getattr(cfg, "cluster_by_mbtr", False):
+                            medoid_indices_mbtr = cluster_mbtr(
+                                cluster_samples,
+                                energy,
+                                cfg,
+                                eval_dir,
+                                eval_dict,
+                                tag="mbtr",
+                            )
+                            run_frequency_analysis(
+                                medoid_indices_mbtr,
+                                cluster_samples,
+                                energy,
+                                eval_dict,
+                                tag="mbtr",
+                                beta=beta_eval,
+                            )
 
                         run_frequency_analysis(
                             medoid_indices_sorted,
@@ -355,14 +406,6 @@ def main(cfg):
                             energy,
                             eval_dict,
                             tag="sorted",
-                            beta=beta_eval,
-                        )
-                        run_frequency_analysis(
-                            medoid_indices_ordered_rmsd,
-                            cluster_samples,
-                            energy,
-                            eval_dict,
-                            tag="rmsd",
                             beta=beta_eval,
                         )
 

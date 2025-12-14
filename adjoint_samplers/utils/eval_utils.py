@@ -16,8 +16,10 @@ import torch
 from matplotlib import pyplot as plt
 from scipy.optimize import linear_sum_assignment
 import wandb
-from sklearn.cluster import DBSCAN
+import hdbscan
 from sklearn.metrics import pairwise_distances
+from sklearn.manifold import TSNE
+import umap
 from tqdm import tqdm
 
 from adjoint_samplers.utils.frequency_analysis import analyze_frequencies_torch
@@ -28,6 +30,8 @@ from adjoint_samplers.utils.align_unordered_mols import (
 from adjoint_samplers.energies.scine_energy import (
     element_type_to_symbol,
 )
+from ase import Atoms
+from dscribe.descriptors import MBTR
 
 # Initialize PyMOL once at module level
 _pymol_initialized = False
@@ -231,6 +235,63 @@ def interatomic_dist(x, n_particles, n_spatial_dim):
     return torch.linalg.norm(distances, dim=-1)
 
 
+def interatomic_dist_by_type(x, atom_types, n_particles, n_spatial_dim):
+    """
+    Compute pairwise distances grouped by atom type pairs.
+    Returns feature vectors where distances are sorted within each atom type pair group.
+
+    Args:
+        x: Tensor of shape (B, n_particles * n_spatial_dim) with coordinates
+        atom_types: List of atom type symbols (e.g., ["C", "H", "C", "H"])
+        n_particles: Number of particles
+        n_spatial_dim: Spatial dimension (2 or 3)
+
+    Returns:
+        Tensor of shape (B, total_distances) with distances grouped and sorted by atom type pairs
+    """
+    B, D = x.shape
+    assert D == n_particles * n_spatial_dim
+    assert len(atom_types) == n_particles
+
+    x = x.view(B, n_particles, n_spatial_dim)
+
+    # Compute pairwise distances (same as interatomic_dist)
+    distances = x[:, None, :, :] - x[:, :, None, :]
+    triu_mask = torch.triu(torch.ones((n_particles, n_particles)), diagonal=1) == 1
+    distances = distances[:, triu_mask]
+    distances = torch.linalg.norm(distances, dim=-1)  # (B, n_pairs)
+
+    # Create mapping from distance index to atom type pair
+    # triu_mask gives us pairs (i, j) where i < j
+    pair_indices = torch.nonzero(triu_mask, as_tuple=False)  # (n_pairs, 2)
+    atom_type_pairs = []
+    for idx in range(pair_indices.shape[0]):
+        i, j = pair_indices[idx, 0].item(), pair_indices[idx, 1].item()
+        type_i, type_j = atom_types[i], atom_types[j]
+        # Use lexicographic ordering for consistency: (min, max)
+        pair = tuple(sorted([type_i, type_j]))
+        atom_type_pairs.append(pair)
+
+    # Group distances by atom type pair
+    unique_pairs = sorted(set(atom_type_pairs))  # Consistent ordering
+    grouped_features = []
+
+    for pair in unique_pairs:
+        # Get indices where this pair occurs
+        pair_mask = torch.tensor(
+            [atom_type_pairs[idx] == pair for idx in range(len(atom_type_pairs))],
+            dtype=torch.bool,
+        )
+        pair_distances = distances[:, pair_mask]  # (B, n_pairs_of_this_type)
+        # Sort within each group
+        pair_distances_sorted, _ = torch.sort(pair_distances, dim=1)
+        grouped_features.append(pair_distances_sorted)
+
+    # Concatenate all groups
+    features = torch.cat(grouped_features, dim=1)  # (B, total_distances)
+    return features
+
+
 def build_xyz_from_positions(positions, atom_type="C", atom_types=None, center=True):
     """
     Build XYZ format string from positions.
@@ -381,15 +442,6 @@ def render_xyz_grid(xyz_strings, ncols=3, width=900, height=900):
     return grid
 
 
-def estimate_eps_from_kdist(dist_matrix, k, percentile=90.0, fallback=None):
-    """Heuristic eps: percentile of k-NN distances (fallback if too small)."""
-    # dist_matrix: (N, N) with zeros on diagonal
-    if dist_matrix.shape[0] <= k:
-        return float(fallback) if fallback is not None else 0.0
-    kth = np.partition(dist_matrix, k, axis=1)[:, k]
-    return float(np.percentile(kth, percentile))
-
-
 def select_medoids_from_labels(labels, distance_matrix, max_medoids=9):
     """Pick up to max_medoids medoids per cluster, ordered by cluster size."""
     uniq, counts = np.unique(labels, return_counts=True)
@@ -418,6 +470,42 @@ def _get_atom_types_from_energy(energy):
         # ScineEnergy has elements as list of ElementType
         return [element_type_to_symbol(elem) for elem in energy.elements]
     return None
+
+
+def samples_to_ase_atoms(samples, atom_types, n_particles, n_spatial_dim):
+    """
+    Convert torch tensor samples to list of ASE Atoms objects.
+
+    Args:
+        samples: Tensor of shape (B, n_particles * n_spatial_dim) with coordinates
+        atom_types: List of atom type symbols (e.g., ["C", "H", "C", "H"])
+        n_particles: Number of particles
+        n_spatial_dim: Spatial dimension (2 or 3)
+
+    Returns:
+        List of ASE Atoms objects
+    """
+    B, D = samples.shape
+    assert D == n_particles * n_spatial_dim
+    assert len(atom_types) == n_particles
+
+    # Reshape to (B, n_particles, n_spatial_dim)
+    coords = samples.view(B, n_particles, n_spatial_dim)
+
+    # Convert to numpy
+    coords_np = coords.detach().cpu().numpy()
+
+    # Handle 2D case by padding with zeros
+    if n_spatial_dim == 2:
+        coords_np = np.concatenate([coords_np, np.zeros((B, n_particles, 1))], axis=2)
+
+    # Create ASE Atoms objects for each sample
+    atoms_list = []
+    for i in range(B):
+        atoms = Atoms(symbols=atom_types, positions=coords_np[i])
+        atoms_list.append(atoms)
+
+    return atoms_list
 
 
 def render_medoids_and_grid(medoid_indices, samples, energy, eval_dir, tag, eval_dict):
@@ -458,10 +546,10 @@ def render_medoids_and_grid(medoid_indices, samples, energy, eval_dir, tag, eval
             width=900,
             height=900,
         )
-        fname = eval_dir / f"dbscan_medoid_grid_{tag}.png"
+        fname = eval_dir / f"hdbscan_medoid_grid_{tag}.png"
         medoid_grid_img.save(fname)
         print(f"Saved medoid grid ({tag}) to\n {fname.resolve()}")
-        eval_dict[f"dbscan_medoid_grid_{tag}"] = wandb.Image(medoid_grid_img)
+        eval_dict[f"hdbscan_medoid_grid_{tag}"] = wandb.Image(medoid_grid_img)
 
 
 def run_frequency_analysis(medoid_indices, samples, energy, eval_dict, tag, beta=1.0):
@@ -585,36 +673,180 @@ def plot_energy_distance_hist(
     return distances_full
 
 
+def plot_2d_projection(
+    samples,
+    energy,
+    eval_dir,
+    eval_dict,
+    tag="projection",
+    cluster_labels=None,
+    n_samples_max=5000,
+):
+    """Plot 2D projections of samples using t-SNE and UMAP on sorted pairwise distances."""
+    print(f"Computing 2D projections for {tag}...")
+
+    # Check if atom types are available for type-grouped clustering
+    atom_types = _get_atom_types_from_energy(energy)
+
+    if atom_types is not None:
+        # Use type-grouped distances when atom types are available
+        dist_features_sorted = (
+            interatomic_dist_by_type(
+                samples, atom_types, energy.n_particles, energy.n_spatial_dim
+            )
+            .detach()
+            .cpu()
+            .numpy()
+        )
+        print(
+            f"[Projection {tag}] Using type-grouped distances (atom types: {set(atom_types)})"
+        )
+    else:
+        # Fall back to original sorted distances behavior
+        distances_full = interatomic_dist(
+            samples, energy.n_particles, energy.n_spatial_dim
+        ).detach()
+        dist_features = (
+            distances_full.cpu().numpy().reshape(distances_full.shape[0], -1)
+        )
+        dist_features_sorted = np.sort(dist_features, axis=1)
+        print(f"[Projection {tag}] Using sorted distances (no atom type information)")
+
+    # Subsample if needed
+    n_samples = dist_features_sorted.shape[0]
+    if n_samples > n_samples_max:
+        print(
+            f"Subsampling from {n_samples} to {n_samples_max} samples for projection..."
+        )
+        indices = np.random.choice(n_samples, n_samples_max, replace=False)
+        dist_features_sorted = dist_features_sorted[indices]
+        if cluster_labels is not None:
+            cluster_labels = cluster_labels[indices]
+
+    # Apply t-SNE
+    print("Computing t-SNE projection...")
+    tsne = TSNE(n_components=2, random_state=42)
+    tsne_coords = tsne.fit_transform(dist_features_sorted)
+
+    # Apply UMAP
+    print("Computing UMAP projection...")
+    umap_reducer = umap.UMAP(n_components=2, random_state=42)
+    umap_coords = umap_reducer.fit_transform(dist_features_sorted)
+
+    # Create t-SNE plot
+    fig_tsne = plt.figure(figsize=(8, 6))
+    ax_tsne = fig_tsne.add_subplot(111)
+    if cluster_labels is not None:
+        scatter_tsne = ax_tsne.scatter(
+            tsne_coords[:, 0],
+            tsne_coords[:, 1],
+            c=cluster_labels,
+            cmap="tab10",
+            alpha=0.6,
+            s=10,
+        )
+        plt.colorbar(scatter_tsne, ax=ax_tsne, label="Cluster")
+    else:
+        ax_tsne.scatter(
+            tsne_coords[:, 0],
+            tsne_coords[:, 1],
+            alpha=0.6,
+            s=10,
+        )
+    ax_tsne.set_title(f"t-SNE Projection ({tag})")
+    ax_tsne.set_xlabel("t-SNE 1")
+    ax_tsne.set_ylabel("t-SNE 2")
+    ax_tsne.grid(True, alpha=0.3)
+    plt.tight_layout()
+    fig_tsne.canvas.draw()
+    tsne_img = fig2img(fig_tsne)
+    fname_tsne = eval_dir / f"projection_2d_tsne_{tag}.png"
+    tsne_img.save(fname_tsne)
+    print(f"Saved t-SNE projection ({tag}) to\n {fname_tsne.resolve()}")
+    plt.close(fig_tsne)
+
+    # Create UMAP plot
+    fig_umap = plt.figure(figsize=(8, 6))
+    ax_umap = fig_umap.add_subplot(111)
+    if cluster_labels is not None:
+        scatter_umap = ax_umap.scatter(
+            umap_coords[:, 0],
+            umap_coords[:, 1],
+            c=cluster_labels,
+            cmap="tab10",
+            alpha=0.6,
+            s=10,
+        )
+        plt.colorbar(scatter_umap, ax=ax_umap, label="Cluster")
+    else:
+        ax_umap.scatter(
+            umap_coords[:, 0],
+            umap_coords[:, 1],
+            alpha=0.6,
+            s=10,
+        )
+    ax_umap.set_title(f"UMAP Projection ({tag})")
+    ax_umap.set_xlabel("UMAP 1")
+    ax_umap.set_ylabel("UMAP 2")
+    ax_umap.grid(True, alpha=0.3)
+    plt.tight_layout()
+    fig_umap.canvas.draw()
+    umap_img = fig2img(fig_umap)
+    fname_umap = eval_dir / f"projection_2d_umap_{tag}.png"
+    umap_img.save(fname_umap)
+    print(f"Saved UMAP projection ({tag}) to\n {fname_umap.resolve()}")
+    plt.close(fig_umap)
+
+    # Log to wandb separately
+    eval_dict[f"projection_2d_tsne_{tag}"] = wandb.Image(tsne_img)
+    eval_dict[f"projection_2d_umap_{tag}"] = wandb.Image(umap_img)
+
+    return tsne_coords, umap_coords
+
+
 def cluster_sorted_distances(
     distances_full, samples, energy, cfg, eval_dir, eval_dict, tag="sorted"
 ):
-    """DBSCAN on sorted pairwise-distance features; render medoids."""
-    dist_features = distances_full.cpu().numpy().reshape(distances_full.shape[0], -1)
-    dist_features_sorted = np.sort(dist_features, axis=1)
-    dist_matrix_sorted = pairwise_distances(dist_features_sorted)
-    eps_sorted = estimate_eps_from_kdist(
-        dist_matrix_sorted,
-        cfg.dbscan.min_samples,
-        fallback=cfg.dbscan.eps,
-    )
-    dbscan = DBSCAN(eps=eps_sorted, min_samples=cfg.dbscan.min_samples)
-    labels = dbscan.fit_predict(dist_features_sorted)
+    """HDBSCAN on sorted pairwise-distance features; render medoids."""
+    # Check if atom types are available for type-grouped clustering
+    atom_types = _get_atom_types_from_energy(energy)
+
+    if atom_types is not None:
+        # Use type-grouped distances when atom types are available
+        dist_features = (
+            interatomic_dist_by_type(
+                samples, atom_types, energy.n_particles, energy.n_spatial_dim
+            )
+            .detach()
+            .cpu()
+            .numpy()
+        )
+        print(
+            f"[HDBSCAN {tag}] Using type-grouped distances (atom types: {set(atom_types)})"
+        )
+    else:
+        # Fall back to original sorted distances behavior
+        dist_features = (
+            distances_full.cpu().numpy().reshape(distances_full.shape[0], -1)
+        )
+        dist_features = np.sort(dist_features, axis=1)
+        print(f"[HDBSCAN {tag}] Using sorted distances (no atom type information)")
+
+    dist_matrix_sorted = pairwise_distances(dist_features)
+    hdbscan_clusterer = hdbscan.HDBSCAN(min_cluster_size=cfg.hdbscan.min_samples)
+    labels = hdbscan_clusterer.fit_predict(dist_features)
     medoid_indices, label_counts = select_medoids_from_labels(
         labels, dist_matrix_sorted
     )
-    eval_dict[f"dbscan_{tag}_cluster_counts"] = label_counts
-    eval_dict[f"dbscan_{tag}_eps"] = eps_sorted
     num_clusters = len([k for k in label_counts.keys() if k != -1])
-    eval_dict[f"dbscan_{tag}_num_clusters"] = num_clusters
-    print(
-        f"[DBSCAN {tag}] eps={eps_sorted:.4f}, clusters={num_clusters}, noise={label_counts.get(-1, 0)}"
-    )
+    eval_dict[f"hdbscan_{tag}_num_clusters"] = num_clusters
+    print(f"[HDBSCAN {tag}] clusters={num_clusters}, noise={label_counts.get(-1, 0)}")
     render_medoids_and_grid(medoid_indices, samples, energy, eval_dir, tag, eval_dict)
-    return medoid_indices
+    return medoid_indices, labels
 
 
 def cluster_rmsd(samples, energy, cfg, eval_dir, eval_dict, tag="rmsd"):
-    """DBSCAN on unordered-aligned RMSD matrix; render medoids."""
+    """HDBSCAN on unordered-aligned RMSD matrix; render medoids."""
     coords = (
         samples.detach().cpu().numpy().reshape(samples.shape[0], energy.n_particles, -1)
     )
@@ -636,28 +868,136 @@ def cluster_rmsd(samples, energy, cfg, eval_dir, eval_dict, tag="rmsd"):
             )
             rmsd_matrix[i, j] = rmsd_val
             rmsd_matrix[j, i] = rmsd_val
-    eps_rmsd = estimate_eps_from_kdist(
+
+    # Plot RMSD matrix as heatmap
+    fig, ax = plt.subplots(figsize=(10, 8))
+    sns.heatmap(
         rmsd_matrix,
-        cfg.dbscan.min_samples,
-        fallback=cfg.dbscan.eps,
+        cmap="viridis",
+        square=True,
+        cbar_kws={"label": "RMSD"},
+        ax=ax,
     )
-    dbscan_rmsd = DBSCAN(
-        eps=eps_rmsd,
-        min_samples=cfg.dbscan.min_samples,
+    ax.set_title(f"Pairwise RMSD Matrix ({tag})")
+    ax.set_xlabel("Sample Index")
+    ax.set_ylabel("Sample Index")
+    plt.tight_layout()
+    fig.canvas.draw()
+    rmsd_heatmap_img = fig2img(fig)
+    fname = eval_dir / f"rmsd_heatmap_{tag}.png"
+    rmsd_heatmap_img.save(fname)
+    print(f"Saved RMSD heatmap ({tag}) to\n {fname.resolve()}")
+    plt.close(fig)
+    eval_dict[f"rmsd_heatmap_{tag}"] = wandb.Image(rmsd_heatmap_img)
+
+    hdbscan_clusterer_rmsd = hdbscan.HDBSCAN(
+        min_cluster_size=cfg.hdbscan.min_samples,
         metric="precomputed",
     )
-    labels_rmsd = dbscan_rmsd.fit_predict(rmsd_matrix)
+    labels_rmsd = hdbscan_clusterer_rmsd.fit_predict(rmsd_matrix)
     medoid_indices_rmsd, label_counts_rmsd = select_medoids_from_labels(
         labels_rmsd, rmsd_matrix
     )
-    eval_dict[f"dbscan_{tag}_cluster_counts"] = label_counts_rmsd
-    eval_dict[f"dbscan_{tag}_eps"] = eps_rmsd
     num_clusters_rmsd = len([k for k in label_counts_rmsd.keys() if k != -1])
-    eval_dict[f"dbscan_{tag}_num_clusters"] = num_clusters_rmsd
+    eval_dict[f"hdbscan_{tag}_num_clusters"] = num_clusters_rmsd
     print(
-        f"[DBSCAN {tag}] eps={eps_rmsd:.4f}, clusters={num_clusters_rmsd}, noise={label_counts_rmsd.get(-1, 0)}"
+        f"[HDBSCAN {tag}] clusters={num_clusters_rmsd}, noise={label_counts_rmsd.get(-1, 0)}"
     )
     render_medoids_and_grid(
         medoid_indices_rmsd, samples, energy, eval_dir, tag, eval_dict
     )
     return medoid_indices_rmsd
+
+
+def cluster_mbtr(samples, energy, cfg, eval_dir, eval_dict, tag="mbtr"):
+    """HDBSCAN on MBTR (Many-Body Tensor Representation) descriptors; render medoids."""
+    # Check if atom types are available (required for MBTR)
+    atom_types = _get_atom_types_from_energy(energy)
+    if atom_types is None:
+        print(
+            f"[HDBSCAN {tag}] Error: Atom types not available, skipping MBTR clustering"
+        )
+        return []
+
+    print(
+        f"[HDBSCAN {tag}] Computing MBTR descriptors for {samples.shape[0]} samples..."
+    )
+
+    # Convert samples to ASE Atoms objects
+    atoms_list = samples_to_ase_atoms(
+        samples, atom_types, energy.n_particles, energy.n_spatial_dim
+    )
+
+    # Get unique species for MBTR
+    unique_species = sorted(set(atom_types))
+
+    # Initialize MBTR descriptor
+    mbtr = MBTR(
+        species=unique_species,
+        k1={
+            "geometry": {"function": "atomic_number"},
+            "grid": {"min": 1, "max": 8, "sigma": 0.1, "n": 100},
+            "weighting": {"function": "unity"},
+        },
+        k2={
+            "geometry": {"function": "inverse_distance"},
+            "grid": {"min": 0, "max": 1, "sigma": 0.1, "n": 100},
+            "weighting": {"function": "exp", "scale": 0.5, "threshold": 1e-3},
+        },
+        k3={
+            "geometry": {"function": "cosine"},
+            "grid": {"min": -1, "max": 1, "sigma": 0.1, "n": 100},
+            "weighting": {"function": "exp", "scale": 0.5, "threshold": 1e-3},
+        },
+        periodic=False,
+        flatten=True,
+        sparse=False,
+    )
+
+    # Compute MBTR descriptors for all samples
+    print(f"[HDBSCAN {tag}] Computing MBTR descriptors...")
+    mbtr_features = mbtr.create(atoms_list)
+
+    # Compute pairwise distance matrix using MBTR features
+    print(f"[HDBSCAN {tag}] Computing pairwise distance matrix from MBTR features...")
+    mbtr_distance_matrix = pairwise_distances(mbtr_features)
+
+    # Plot MBTR distance matrix as heatmap
+    fig, ax = plt.subplots(figsize=(10, 8))
+    sns.heatmap(
+        mbtr_distance_matrix,
+        cmap="viridis",
+        square=True,
+        cbar_kws={"label": "MBTR Distance"},
+        ax=ax,
+    )
+    ax.set_title(f"Pairwise MBTR Distance Matrix ({tag})")
+    ax.set_xlabel("Sample Index")
+    ax.set_ylabel("Sample Index")
+    plt.tight_layout()
+    fig.canvas.draw()
+    mbtr_heatmap_img = fig2img(fig)
+    fname = eval_dir / f"mbtr_heatmap_{tag}.png"
+    mbtr_heatmap_img.save(fname)
+    print(f"Saved MBTR heatmap ({tag}) to\n {fname.resolve()}")
+    plt.close(fig)
+    eval_dict[f"mbtr_heatmap_{tag}"] = wandb.Image(mbtr_heatmap_img)
+
+    # Perform HDBSCAN clustering
+    hdbscan_clusterer_mbtr = hdbscan.HDBSCAN(
+        min_cluster_size=cfg.hdbscan.min_samples,
+        metric="precomputed",
+    )
+    labels_mbtr = hdbscan_clusterer_mbtr.fit_predict(mbtr_distance_matrix)
+    medoid_indices_mbtr, label_counts_mbtr = select_medoids_from_labels(
+        labels_mbtr, mbtr_distance_matrix
+    )
+    num_clusters_mbtr = len([k for k in label_counts_mbtr.keys() if k != -1])
+    eval_dict[f"hdbscan_{tag}_num_clusters"] = num_clusters_mbtr
+    print(
+        f"[HDBSCAN {tag}] clusters={num_clusters_mbtr}, noise={label_counts_mbtr.get(-1, 0)}"
+    )
+    render_medoids_and_grid(
+        medoid_indices_mbtr, samples, energy, eval_dir, tag, eval_dict
+    )
+    return medoid_indices_mbtr
