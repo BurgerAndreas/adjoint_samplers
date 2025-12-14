@@ -221,7 +221,7 @@ def dist_point_clouds(x0, x1):
 # from https://github.com/jarridrb/DEM/blob/main/dem/utils/data_utils.py
 def interatomic_dist(x, n_particles, n_spatial_dim):
     B, D = x.shape
-    assert D == n_particles * n_spatial_dim
+    assert D == n_particles * n_spatial_dim, f"x={x.shape} != n_particles={n_particles} * n_spatial_dim={n_spatial_dim}"
 
     x = x.view(B, n_particles, n_spatial_dim)
 
@@ -250,8 +250,8 @@ def interatomic_dist_by_type(x, atom_types, n_particles, n_spatial_dim):
         Tensor of shape (B, total_distances) with distances grouped and sorted by atom type pairs
     """
     B, D = x.shape
-    assert D == n_particles * n_spatial_dim
-    assert len(atom_types) == n_particles
+    assert D == n_particles * n_spatial_dim, f"x={x.shape} != n_particles={n_particles} * n_spatial_dim={n_spatial_dim}"
+    assert len(atom_types) == n_particles, f"len(atom_types)={len(atom_types)} != n_particles={n_particles}"
 
     x = x.view(B, n_particles, n_spatial_dim)
 
@@ -486,8 +486,8 @@ def samples_to_ase_atoms(samples, atom_types, n_particles, n_spatial_dim):
         List of ASE Atoms objects
     """
     B, D = samples.shape
-    assert D == n_particles * n_spatial_dim
-    assert len(atom_types) == n_particles
+    assert D == n_particles * n_spatial_dim, f"samples={samples.shape} != n_particles={n_particles} * n_spatial_dim={n_spatial_dim}"
+    assert len(atom_types) == n_particles, f"len(atom_types)={len(atom_types)} != n_particles={n_particles}"
 
     # Reshape to (B, n_particles, n_spatial_dim)
     coords = samples.view(B, n_particles, n_spatial_dim)
@@ -708,6 +708,7 @@ def plot_2d_projection(
 
     # Subsample if needed
     n_samples = dist_features_sorted.shape[0]
+    n_features = dist_features_sorted.shape[1]
     if n_samples > n_samples_max:
         print(
             f"Subsampling from {n_samples} to {n_samples_max} samples for projection..."
@@ -716,6 +717,14 @@ def plot_2d_projection(
         dist_features_sorted = dist_features_sorted[indices]
         if cluster_labels is not None:
             cluster_labels = cluster_labels[indices]
+
+    # Check if we have enough features for 2D projection
+    if n_features < 2:
+        print(
+            f"Skipping 2D projection: only {n_features} feature(s) available "
+            f"(need at least 2 for t-SNE/UMAP projection)"
+        )
+        return None, None
 
     # Apply t-SNE
     print("Computing t-SNE projection...")
