@@ -1,0 +1,16 @@
+# @package _global_
+
+dim: 4
+n_particles: 2
+spatial_dim: 2
+
+energy:
+  _target_: adjoint_samplers.energies.double_well_energy.DoubleWellEnergy
+  dim: ${dim}
+  n_particles: ${n_particles}
+  gad: false
+
+evaluator:
+  _target_: adjoint_samplers.components.evaluator.NullEvaluator
+  ref_samples_path: null
+  do_particles_w2: false

@@ -573,7 +573,7 @@ def run_frequency_analysis(medoid_indices, samples, energy, eval_dict, tag, beta
                 hessian=hess,
                 cart_coords=samples[idx],
                 atomsymbols=atoms,
-                ev_thresh=-1e-6,
+                # ev_thresh=-1e-6,
             )
             neg_num = int(freq["neg_num"])
         else:
