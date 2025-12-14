@@ -683,8 +683,6 @@ def plot_2d_projection(
     n_samples_max=5000,
 ):
     """Plot 2D projections of samples using t-SNE and UMAP on sorted pairwise distances."""
-    print(f"Computing 2D projections for {tag}...")
-
     # Check if atom types are available for type-grouped clustering
     atom_types = _get_atom_types_from_energy(energy)
 
@@ -698,9 +696,6 @@ def plot_2d_projection(
             .cpu()
             .numpy()
         )
-        print(
-            f"[Projection {tag}] Using type-grouped distances (atom types: {set(atom_types)})"
-        )
     else:
         # Fall back to original sorted distances behavior
         distances_full = interatomic_dist(
@@ -710,7 +705,6 @@ def plot_2d_projection(
             distances_full.cpu().numpy().reshape(distances_full.shape[0], -1)
         )
         dist_features_sorted = np.sort(dist_features, axis=1)
-        print(f"[Projection {tag}] Using sorted distances (no atom type information)")
 
     # Subsample if needed
     n_samples = dist_features_sorted.shape[0]

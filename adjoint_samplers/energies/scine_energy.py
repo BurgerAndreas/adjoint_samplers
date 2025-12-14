@@ -290,6 +290,7 @@ class ScineEnergy(BaseEnergy):
             functional=self.functional,
             n_jobs=self.n_jobs,
             verbose=0,
+            compute_hessian=False,
         )
 
         # Extract energies and handle failures
@@ -337,6 +338,7 @@ class ScineEnergy(BaseEnergy):
             functional=self.functional,
             n_jobs=self.n_jobs,
             verbose=0,
+            compute_hessian=False,
         )
 
         # Extract gradients and handle failures
@@ -406,6 +408,7 @@ class ScineEnergy(BaseEnergy):
             functional=self.functional,
             n_jobs=self.n_jobs,
             verbose=0,
+            compute_hessian=True,
         )
 
         # Extract Hessians and handle failures

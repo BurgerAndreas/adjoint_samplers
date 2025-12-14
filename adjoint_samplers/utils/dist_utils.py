@@ -158,6 +158,7 @@ class CenteredParticlesHarmonic(distributions.Distribution):
             return M.inverse()
         except RuntimeError:
             import warnings
+
             warnings.warn(
                 f"Matrix is singular for n_particles={n_particles}, spatial_dim={spatial_dim}. "
                 "Using pseudoinverse instead.",

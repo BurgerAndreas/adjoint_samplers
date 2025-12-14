@@ -47,9 +47,10 @@ def compute_single_geometry(
     elements: List[scine_utilities.ElementType],
     positions_angstrom: np.ndarray,
     functional: str,
+    compute_hessian: bool = False,
 ) -> Dict[str, Any]:
     """
-    Worker function to compute Hessian for a single geometry.
+    Worker function to compute energy, gradients, and optionally Hessian for a single geometry.
 
     Each worker process initializes its own SCINE module manager since
     SCINE uses singletons per process.
@@ -59,6 +60,7 @@ def compute_single_geometry(
         elements: List of ElementType for each atom
         positions_angstrom: Atomic positions in Angstrom, shape (N_atoms, 3)
         functional: Calculator functional name (e.g., "PM6", "AM1", "RM1", "MNDO", "DFTB0")
+        compute_hessian: Whether to compute the Hessian matrix (default False)
 
     Returns:
         Dictionary with results:
@@ -66,7 +68,7 @@ def compute_single_geometry(
         - success: Boolean indicating if calculation succeeded
         - energy_ev: Energy in eV (if successful)
         - gradients: Gradients array in Hartree/Bohr (if successful)
-        - hessian_ev_ang2: Hessian matrix in eV/Å² (if successful)
+        - hessian_ev_ang2: Hessian matrix in eV/Å² (if successful and compute_hessian=True)
         - error: Error message (if failed)
     """
     # Force single-threaded execution per process to avoid oversubscription
@@ -104,13 +106,13 @@ def compute_single_geometry(
 
     # Assign structure and set required properties
     calculator.structure = structure
-    calculator.set_required_properties(
-        [
-            scine_utilities.Property.Energy,
-            scine_utilities.Property.Gradients,
-            scine_utilities.Property.Hessian,
-        ]
-    )
+    properties = [
+        scine_utilities.Property.Energy,
+        scine_utilities.Property.Gradients,
+    ]
+    if compute_hessian:
+        properties.append(scine_utilities.Property.Hessian)
+    calculator.set_required_properties(properties)
 
     # Suppress SCINE output
     scine_utilities.core.Log.silent()
@@ -122,15 +124,12 @@ def compute_single_geometry(
     # Extract results
     energy = results.energy  # Hartree
     gradients = results.gradients  # Hartree/Bohr
-    hessian = results.hessian  # Hartree/Bohr^2
 
     # Convert units
     hartree_to_ev = 27.211386245988
     bohr_to_ang = 0.529177210903
 
     energy_ev = energy * hartree_to_ev
-    # Hessian conversion: Energy / Distance^2
-    hessian_ev_ang2 = hessian * (hartree_to_ev / (bohr_to_ang**2))
 
     # Restore original environment variables
     for var, value in original_env.items():
@@ -139,13 +138,21 @@ def compute_single_geometry(
         else:
             os.environ[var] = value
 
-    return {
+    result_dict = {
         "geometry_idx": geometry_idx,
         "success": True,
         "energy_ev": energy_ev,
         "gradients": gradients,
-        "hessian_ev_ang2": hessian_ev_ang2,
     }
+
+    # Conditionally compute and add Hessian
+    if compute_hessian:
+        hessian = results.hessian  # Hartree/Bohr^2
+        # Hessian conversion: Energy / Distance^2
+        hessian_ev_ang2 = hessian * (hartree_to_ev / (bohr_to_ang**2))
+        result_dict["hessian_ev_ang2"] = hessian_ev_ang2
+
+    return result_dict
 
 
 def compute_batch(
@@ -153,9 +160,10 @@ def compute_batch(
     functional: str,
     n_jobs: int = -1,
     verbose: int = 0,
+    compute_hessian: bool = False,
 ) -> List[Dict[str, Any]]:
     """
-    Compute Hessians for a batch of geometries in parallel.
+    Compute energy, gradients, and optionally Hessians for a batch of geometries in parallel.
 
     Args:
         geometries: List of (elements, positions_angstrom) tuples
@@ -164,13 +172,16 @@ def compute_batch(
         functional: Calculator functional name (e.g., "PM6", "AM1", "RM1", "MNDO", "DFTB0")
         n_jobs: Number of parallel jobs (-1 for all CPUs, 1 for sequential)
         verbose: Verbosity level for joblib (0=silent, 1=progress, 10=debug)
+        compute_hessian: Whether to compute the Hessian matrix (default False)
 
     Returns:
         List of result dictionaries (one per geometry), ordered by geometry_idx
     """
     # Create tasks
     tasks = [
-        delayed(compute_single_geometry)(idx, elements, positions, functional)
+        delayed(compute_single_geometry)(
+            idx, elements, positions, functional, compute_hessian
+        )
         for idx, (elements, positions) in enumerate(geometries)
     ]
 
@@ -243,7 +254,9 @@ if __name__ == "__main__":
             )
 
             start_time = time.time()
-            results = compute_batch(geometries, functional, n_jobs=n_jobs, verbose=0)
+            results = compute_batch(
+                geometries, functional, n_jobs=n_jobs, verbose=0, compute_hessian=True
+            )
             end_time = time.time()
 
             elapsed_time = end_time - start_time
