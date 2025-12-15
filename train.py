@@ -28,7 +28,7 @@ from adjoint_samplers.utils.eval_utils import (
     build_xyz_from_positions,
     render_xyz_grid,
     render_xyz_to_png,
-    cluster_sorted_distances,
+    cluster_intradist,
     cluster_rmsd,
     cluster_mbtr,
     run_frequency_analysis,
@@ -340,15 +340,15 @@ def main(cfg):
                             cluster_samples, energy.n_particles, energy.n_spatial_dim
                         ).detach()
 
-                        medoid_indices_sorted, cluster_labels_sorted = (
-                            cluster_sorted_distances(
+                        medoid_indices_intradist, cluster_labels_intradist = (
+                            cluster_intradist(
                                 distances_cluster,
                                 cluster_samples,
                                 energy,
                                 cfg,
                                 eval_dir,
                                 eval_dict,
-                                tag="sorted",
+                                tag="intradist",
                             )
                         )
 
@@ -359,8 +359,8 @@ def main(cfg):
                             energy,
                             eval_dir,
                             eval_dict,
-                            tag="sorted",
-                            cluster_labels=cluster_labels_sorted,
+                            tag="intradist",
+                            cluster_labels=cluster_labels_intradist,
                             n_samples_max=max_samples_proj,
                         )
 
@@ -401,11 +401,11 @@ def main(cfg):
                             )
 
                         run_frequency_analysis(
-                            medoid_indices_sorted,
+                            medoid_indices_intradist,
                             cluster_samples,
                             energy,
                             eval_dict,
-                            tag="sorted",
+                            tag="intradist",
                             beta=beta_eval,
                         )
 

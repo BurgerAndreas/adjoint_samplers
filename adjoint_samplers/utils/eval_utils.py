@@ -3,6 +3,8 @@
 import io
 import os
 import sys
+import math
+import multiprocessing as mp
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -97,7 +99,10 @@ def _apply_pastel_colors():
 
 
 def _add_distance_labels(obj_name="mol", cutoff=3.8, max_pairs=10):
-    """Draw distance labels between nearby atom pairs to avoid clutter."""
+    """Draw distance labels between nearby atom pairs to avoid clutter.
+    cutoff: distance in Angstroms to draw bond labels for.
+    max_pairs: maximum number of pairs to draw labels for.
+    """
     model = cmd.get_model(obj_name)
     atoms = model.atom
     n = len(atoms)
@@ -221,7 +226,9 @@ def dist_point_clouds(x0, x1):
 # from https://github.com/jarridrb/DEM/blob/main/dem/utils/data_utils.py
 def interatomic_dist(x, n_particles, n_spatial_dim):
     B, D = x.shape
-    assert D == n_particles * n_spatial_dim, f"x={x.shape} != n_particles={n_particles} * n_spatial_dim={n_spatial_dim}"
+    assert D == n_particles * n_spatial_dim, (
+        f"x={x.shape} != n_particles={n_particles} * n_spatial_dim={n_spatial_dim}"
+    )
 
     x = x.view(B, n_particles, n_spatial_dim)
 
@@ -250,8 +257,12 @@ def interatomic_dist_by_type(x, atom_types, n_particles, n_spatial_dim):
         Tensor of shape (B, total_distances) with distances grouped and sorted by atom type pairs
     """
     B, D = x.shape
-    assert D == n_particles * n_spatial_dim, f"x={x.shape} != n_particles={n_particles} * n_spatial_dim={n_spatial_dim}"
-    assert len(atom_types) == n_particles, f"len(atom_types)={len(atom_types)} != n_particles={n_particles}"
+    assert D == n_particles * n_spatial_dim, (
+        f"x={x.shape} != n_particles={n_particles} * n_spatial_dim={n_spatial_dim}"
+    )
+    assert len(atom_types) == n_particles, (
+        f"len(atom_types)={len(atom_types)} != n_particles={n_particles}"
+    )
 
     x = x.view(B, n_particles, n_spatial_dim)
 
@@ -323,7 +334,7 @@ def build_xyz_from_positions(positions, atom_type="C", atom_types=None, center=T
     return "\n".join(lines)
 
 
-def set_pymol_settings():
+def set_pymol_settings(cutoff=3.8, max_pairs=10, flat=False):
     # Try both sticks and spheres to ensure visibility
     cmd.show("sticks")
     cmd.show("spheres", "all")
@@ -334,20 +345,67 @@ def set_pymol_settings():
     cmd.set("ray_shadows", 0)  # disable ray-tracing shadows
     cmd.set("ray_shadow", 0)
     # cmd.set("light_count", 1) # 0 = no highlights
-    # # no highlights
-    # cmd.set("shininess", 0)
-    # cmd.set("specular", 0.0)
-    # 2 = flat
-    # cmd.set("ambient", 2)  # ambient light = brightness
+    if flat:
+        # no highlights
+        cmd.set("shininess", 0)
+        cmd.set("specular", 0.0)
+        # 2 = flat
+        cmd.set("ambient", 2)  # ambient light = brightness
     # cmd.set("reflect", 0) # dark
     # cmd.set("direct", 0) # black
     cmd.set("ray_opaque_background", 1)
     _apply_pastel_colors()
-    _add_distance_labels("mol")
+    _add_distance_labels("mol", cutoff, max_pairs)
     cmd.zoom("mol", buffer=0.2)
 
 
-def render_xyz_to_png(xyz_str, width=300, height=300):
+def align_to_standard_frame(coords):
+    """
+    Center at the center of mass and rotate so the first principal axis maps to +z
+    and the second principal axis maps to +x.
+    """
+    if coords.shape[1] == 2:
+        coords = np.concatenate([coords, np.zeros((coords.shape[0], 1))], axis=1)
+    center = coords.mean(axis=0, keepdims=True)
+    centered = coords - center
+    cov = centered.T @ centered
+    U, _, _ = np.linalg.svd(cov)
+    target_axes = np.eye(3)
+    rotation = target_axes @ U.T
+    aligned = centered @ rotation.T
+    return aligned
+
+
+def _rmsd_row_block(args):
+    """
+    Compute a block of the upper-triangular RMSD matrix for rows [start_idx, end_idx).
+    Returns (start_idx, end_idx, block_matrix).
+    """
+    start_idx, end_idx, coords, atoms = args
+    n = coords.shape[0]
+    block = np.zeros((end_idx - start_idx, n))
+    for local_i, i in enumerate(range(start_idx, end_idx)):
+        for j in range(i + 1, n):
+            rmsd_val = rmsd_unordered_from_numpy(
+                atoms,
+                coords[i],
+                atoms,
+                coords[j],
+                reorder=True,
+                reorder_method_str=REORDER_HUNGARIAN,
+            )
+            block[local_i, j] = rmsd_val
+    return start_idx, end_idx, block
+
+
+def render_xyz_to_png(
+    xyz_str,
+    width=300,
+    height=300,
+    draw_label_cutoff=3.8,
+    draw_label_max_pairs=10,
+    flat=False,
+):
     _init_pymol()
 
     # Clean up any existing molecules
@@ -362,7 +420,9 @@ def render_xyz_to_png(xyz_str, width=300, height=300):
         cmd.viewport(width, height)
     cmd.bg_color("white")
     cmd.hide("all")
-    set_pymol_settings()
+    set_pymol_settings(
+        cutoff=draw_label_cutoff, max_pairs=draw_label_max_pairs, flat=flat
+    )
     cmd.refresh()
 
     with NamedTemporaryFile(delete=False, suffix=".png") as png_tmp:
@@ -381,7 +441,15 @@ def render_xyz_to_png(xyz_str, width=300, height=300):
     return png_bytes
 
 
-def render_xyz_grid(xyz_strings, ncols=3, width=900, height=900):
+def render_xyz_grid(
+    xyz_strings,
+    ncols=3,
+    width=900,
+    height=900,
+    draw_label_cutoff=3.8,
+    draw_label_max_pairs=10,
+    flat=False,
+):
     """Render up to ncols*ncols XYZ strings into a grid PNG bytes."""
     n = len(xyz_strings)
     n = min(n, ncols * ncols)
@@ -403,7 +471,9 @@ def render_xyz_grid(xyz_strings, ncols=3, width=900, height=900):
             cmd.viewport(cell_w, cell_h)
         cmd.bg_color("white")
         cmd.hide("all")
-        set_pymol_settings()
+        set_pymol_settings(
+            cutoff=draw_label_cutoff, max_pairs=draw_label_max_pairs, flat=flat
+        )
         cmd.refresh()
 
         with NamedTemporaryFile(delete=False, suffix=".png") as png_tmp:
@@ -486,8 +556,12 @@ def samples_to_ase_atoms(samples, atom_types, n_particles, n_spatial_dim):
         List of ASE Atoms objects
     """
     B, D = samples.shape
-    assert D == n_particles * n_spatial_dim, f"samples={samples.shape} != n_particles={n_particles} * n_spatial_dim={n_spatial_dim}"
-    assert len(atom_types) == n_particles, f"len(atom_types)={len(atom_types)} != n_particles={n_particles}"
+    assert D == n_particles * n_spatial_dim, (
+        f"samples={samples.shape} != n_particles={n_particles} * n_spatial_dim={n_spatial_dim}"
+    )
+    assert len(atom_types) == n_particles, (
+        f"len(atom_types)={len(atom_types)} != n_particles={n_particles}"
+    )
 
     # Reshape to (B, n_particles, n_spatial_dim)
     coords = samples.view(B, n_particles, n_spatial_dim)
@@ -508,15 +582,38 @@ def samples_to_ase_atoms(samples, atom_types, n_particles, n_spatial_dim):
     return atoms_list
 
 
-def render_medoids_and_grid(medoid_indices, samples, energy, eval_dir, tag, eval_dict):
+def render_medoids_and_grid(
+    medoid_indices,
+    samples,
+    energy,
+    eval_dir,
+    tag,
+    eval_dict,
+    draw_label_cutoff=3.8,
+    draw_label_max_pairs=10,
+    flat=False,
+):
     """Render per-medoid PNGs and a grid for the provided indices."""
     if len(medoid_indices) == 0:
         print(f"No clusters found for {tag}")
         return
     print(f"Rendering {len(medoid_indices)} medoid representatives for {tag}...")
     medoid_xyz = []
+    medoid_energies = []
+    medoid_grad_norms = []
+    medoid_labels = []
     atom_types = _get_atom_types_from_energy(energy)
-    for idx in medoid_indices:
+    for i, idx in enumerate(medoid_indices):
+        sample = samples[idx : idx + 1]
+        energy_val = energy.eval(sample).detach()
+        medoid_energies.append(float(energy_val.item()))
+        grad = energy.grad_E(sample)
+        grad_norm = grad.view(grad.shape[0], -1).norm(dim=1)
+        medoid_grad_norms.append(float(grad_norm.item()))
+        label = f"medoid_{tag}_{i}"
+        medoid_labels.append(label)
+        # eval_dict[f"{label}_energy"] = medoid_energies[-1]
+        # eval_dict[f"{label}_grad_norm"] = medoid_grad_norms[-1]
         pos = (
             samples[idx]
             .detach()
@@ -526,12 +623,19 @@ def render_medoids_and_grid(medoid_indices, samples, energy, eval_dir, tag, eval
         )
         if pos.shape[1] == 2:
             pos = np.concatenate([pos, np.zeros((pos.shape[0], 1))], axis=1)
+        pos = align_to_standard_frame(pos)
         xyz = build_xyz_from_positions(
-            pos, atom_type="C", atom_types=atom_types, center=True
+            pos, atom_type="C", atom_types=atom_types, center=False
         )
         medoid_xyz.append(xyz)
     for i, xyz_str in enumerate(medoid_xyz[:3]):
-        png_bytes = render_xyz_to_png(xyz_str, width=600, height=600)
+        png_bytes = render_xyz_to_png(
+            xyz_str,
+            width=600,
+            height=600,
+            draw_label_cutoff=draw_label_cutoff,
+            draw_label_max_pairs=draw_label_max_pairs,
+        )
         medoid_img = PIL.Image.open(io.BytesIO(png_bytes))
         if medoid_img.mode != "RGB":
             medoid_img = medoid_img.convert("RGB")
@@ -545,11 +649,39 @@ def render_medoids_and_grid(medoid_indices, samples, energy, eval_dir, tag, eval
             ncols=3,
             width=900,
             height=900,
+            draw_label_cutoff=draw_label_cutoff,
+            draw_label_max_pairs=draw_label_max_pairs,
+            flat=flat,
         )
         fname = eval_dir / f"hdbscan_medoid_grid_{tag}.png"
         medoid_grid_img.save(fname)
         print(f"Saved medoid grid ({tag}) to\n {fname.resolve()}")
         eval_dict[f"hdbscan_medoid_grid_{tag}"] = wandb.Image(medoid_grid_img)
+    if len(medoid_energies) > 0:
+        eval_dict[f"{tag}_medoid_energies"] = wandb.Histogram(medoid_energies)
+        eval_dict[f"{tag}_medoid_grad_norms"] = wandb.Histogram(medoid_grad_norms)
+        order = np.argsort(medoid_energies)
+        energies_sorted = [medoid_energies[k] for k in order]
+        # only get the idx (last character) of the label
+        labels_sorted = [medoid_labels[k][-1] for k in order] 
+        sns.reset_defaults()
+        sns.set_theme(context="poster", palette="deep", font_scale=0.6)
+        fig, ax = plt.subplots(figsize=(8, 6))
+        sns.barplot(x=labels_sorted, y=energies_sorted, ax=ax)
+        ax.set_title(f"Medoid energies ({tag})")
+        ax.set_xlabel("Medoid")
+        ax.set_ylabel("Energy")
+        ax.tick_params(axis="x", rotation=45, labelsize=8)
+        plt.tight_layout(pad=0.1)
+        fig.canvas.draw()
+        bar_img = fig2img(fig)
+        fname = eval_dir / f"medoid_{tag}_energy_bar.png"
+        bar_img.save(fname)
+        print(f"Saved medoid energy bar plot ({tag}) to\n {fname.resolve()}")
+        eval_dict[f"medoid_{tag}_energy_bar"] = wandb.Image(bar_img)
+        plt.close("all")
+        sns.reset_defaults()
+        plt.rcdefaults()
 
 
 def run_frequency_analysis(medoid_indices, samples, energy, eval_dict, tag, beta=1.0):
@@ -590,19 +722,14 @@ def run_frequency_analysis(medoid_indices, samples, energy, eval_dict, tag, beta
             freq_other += 1
     if freq_samples > 0:
         prefix = f"{tag}_"
-        eval_dict[f"{prefix}freq_minima"] = freq_minima
-        eval_dict[f"{prefix}freq_transition_states"] = freq_ts
-        eval_dict[f"{prefix}freq_other"] = freq_other
-        denom = freq_minima if freq_minima > 0 else 1
-        eval_dict[f"{prefix}freq_ts_over_min_ratio"] = freq_ts / denom
+        total = float(freq_samples)
+        freq_minima_ratio = freq_minima / total
+        freq_ts_ratio = freq_ts / total
+        freq_other_ratio = freq_other / total
+        eval_dict[f"{prefix}freq_minima"] = freq_minima_ratio
+        eval_dict[f"{prefix}freq_transition_states"] = freq_ts_ratio
+        eval_dict[f"{prefix}freq_other"] = freq_other_ratio
         eval_dict[f"{prefix}freq_total_samples"] = freq_samples
-        if tag == "sorted":
-            # preserve legacy keys for downstream consumers
-            eval_dict["freq_minima"] = freq_minima
-            eval_dict["freq_transition_states"] = freq_ts
-            eval_dict["freq_other"] = freq_other
-            eval_dict["freq_ts_over_min_ratio"] = freq_ts / denom
-            eval_dict["freq_total_samples"] = freq_samples
 
 
 def plot_energy_distance_hist(
@@ -807,10 +934,10 @@ def plot_2d_projection(
     return tsne_coords, umap_coords
 
 
-def cluster_sorted_distances(
-    distances_full, samples, energy, cfg, eval_dir, eval_dict, tag="sorted"
+def cluster_intradist(
+    distances_full, samples, energy, cfg, eval_dir, eval_dict, tag="intradist"
 ):
-    """HDBSCAN on sorted pairwise-distance features; render medoids."""
+    """HDBSCAN on intra-distance features (sorted or type-grouped); render medoids."""
     # Check if atom types are available for type-grouped clustering
     atom_types = _get_atom_types_from_energy(energy)
 
@@ -844,7 +971,17 @@ def cluster_sorted_distances(
     num_clusters = len([k for k in label_counts.keys() if k != -1])
     eval_dict[f"hdbscan_{tag}_num_clusters"] = num_clusters
     print(f"[HDBSCAN {tag}] clusters={num_clusters}, noise={label_counts.get(-1, 0)}")
-    render_medoids_and_grid(medoid_indices, samples, energy, eval_dir, tag, eval_dict)
+    render_medoids_and_grid(
+        medoid_indices,
+        samples,
+        energy,
+        eval_dir,
+        tag,
+        eval_dict,
+        draw_label_cutoff=getattr(cfg, "draw_label_cutoff", 3.8),
+        draw_label_max_pairs=getattr(cfg, "draw_label_max_pairs", 10),
+        flat=getattr(cfg, "render_medoids_flat", False),
+    )
     return medoid_indices, labels
 
 
@@ -857,20 +994,23 @@ def cluster_rmsd(samples, energy, cfg, eval_dir, eval_dict, tag="rmsd"):
         pad = np.zeros((coords.shape[0], energy.n_particles, 1))
         coords = np.concatenate([coords, pad], axis=2)
     atoms = np.ones(energy.n_particles, dtype=int)
-    rmsd_matrix = np.zeros((coords.shape[0], coords.shape[0]))
-    # compute pairwise RMSD matrix
-    for i in tqdm(range(coords.shape[0]), desc="Computing RMSD matrix"):
-        for j in range(i + 1, coords.shape[0]):
-            rmsd_val = rmsd_unordered_from_numpy(
-                atoms,
-                coords[i],
-                atoms,
-                coords[j],
-                reorder=True,
-                reorder_method_str=REORDER_HUNGARIAN,
-            )
-            rmsd_matrix[i, j] = rmsd_val
-            rmsd_matrix[j, i] = rmsd_val
+    n = coords.shape[0]
+    rmsd_matrix = np.zeros((n, n))
+
+    num_workers = min(mp.cpu_count(), getattr(cfg, "rmsd_num_workers", 10))
+    block_size = max(1, math.ceil(n / num_workers))
+    tasks = []
+    for start in range(0, n, block_size):
+        end = min(n, start + block_size)
+        tasks.append((start, end, coords, atoms))
+    with mp.Pool(processes=num_workers) as pool:
+        for start_idx, end_idx, block in tqdm(
+            pool.imap_unordered(_rmsd_row_block, tasks),
+            total=len(tasks),
+            desc="Computing RMSD matrix (parallel)",
+        ):
+            rmsd_matrix[start_idx:end_idx] += block
+    rmsd_matrix = rmsd_matrix + rmsd_matrix.T
 
     # Plot RMSD matrix as heatmap
     fig, ax = plt.subplots(figsize=(10, 8))
@@ -907,7 +1047,14 @@ def cluster_rmsd(samples, energy, cfg, eval_dir, eval_dict, tag="rmsd"):
         f"[HDBSCAN {tag}] clusters={num_clusters_rmsd}, noise={label_counts_rmsd.get(-1, 0)}"
     )
     render_medoids_and_grid(
-        medoid_indices_rmsd, samples, energy, eval_dir, tag, eval_dict
+        medoid_indices_rmsd,
+        samples,
+        energy,
+        eval_dir,
+        tag,
+        eval_dict,
+        draw_label_cutoff=getattr(cfg, "draw_label_cutoff", 3.8),
+        draw_label_max_pairs=getattr(cfg, "draw_label_max_pairs", 10),
     )
     return medoid_indices_rmsd
 
@@ -1001,6 +1148,13 @@ def cluster_mbtr(samples, energy, cfg, eval_dir, eval_dict, tag="mbtr"):
         f"[HDBSCAN {tag}] clusters={num_clusters_mbtr}, noise={label_counts_mbtr.get(-1, 0)}"
     )
     render_medoids_and_grid(
-        medoid_indices_mbtr, samples, energy, eval_dir, tag, eval_dict
+        medoid_indices_mbtr,
+        samples,
+        energy,
+        eval_dir,
+        tag,
+        eval_dict,
+        draw_label_cutoff=getattr(cfg, "draw_label_cutoff", 3.8),
+        draw_label_max_pairs=getattr(cfg, "draw_label_max_pairs", 10),
     )
     return medoid_indices_mbtr

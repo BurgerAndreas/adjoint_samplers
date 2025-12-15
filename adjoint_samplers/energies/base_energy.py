@@ -95,7 +95,7 @@ class BaseEnergy:
 
             # GAD: -∇V + 2⟨∇V, v1⟩v1
             gad_i = -grad_V_i + 2 * inner_product * v1
-            # GAD is a "force", we need the "gradient"
+            # GAD is a "force", we need to return the "gradient"
             gad_i = -gad_i * beta
             gad_vectors.append(gad_i)
 

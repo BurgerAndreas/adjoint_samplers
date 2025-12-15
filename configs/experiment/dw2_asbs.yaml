@@ -57,3 +57,7 @@ energy_min: null
 energy_max: null
 dist_min: 0
 dist_max: 10
+
+draw_label_cutoff: 8.0
+draw_label_max_pairs: 10
+render_medoids_flat: true
