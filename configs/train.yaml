@@ -63,6 +63,7 @@ energy:
   newton_raphson: false
   newton_raphson_2: false
   newton_raphson_then_norm_outside_ts: false
+  newton_raphson_outside_ts: false
 
 # === paths  ===
 # dataset:
