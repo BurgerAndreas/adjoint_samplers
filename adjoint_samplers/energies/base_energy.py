@@ -27,6 +27,9 @@ class BaseEnergy:
         self.newton_raphson_2 = newton_raphson_2
         self.newton_raphson_then_norm_outside_ts = newton_raphson_then_norm_outside_ts
         self.newton_raphson_outside_ts = newton_raphson_outside_ts
+        assert self.check_norm_strategy(), (
+            "Only one norm strategy can be true at the same time"
+        )
 
     def check_norm_strategy(self) -> bool:
         # only at max one can be true at the same time
@@ -111,7 +114,7 @@ class BaseEnergy:
         gad_vectors = []
         for i in range(batch_size):
             # Eigendecomposition of Hessian for sample i
-            eigenvals, eigenvecs = torch.linalg.eigh(H[i])
+            eigenvals, eigenvecs = torch.linalg.eigh(H[i])  # [B,2], [B,2,2]
 
             # v1 is the eigenvector with smallest eigenvalue (first column)
             v1 = eigenvecs[:, 0]
@@ -122,7 +125,7 @@ class BaseEnergy:
             # Compute ⟨∇V, v1⟩
             inner_product = torch.dot(grad_V_i, v1)
 
-            # GAD: -∇V + 2⟨∇V, v1⟩v1
+            # dx/dt = F_GAD = -∇V + 2⟨∇V, v1⟩v1
             gad_i = -grad_V_i + 2 * inner_product * v1
 
             # Optionally norm GAD to unity if eigenvalue product > 0
@@ -142,11 +145,11 @@ class BaseEnergy:
                 )
 
             if self.norm_gad_outside_ts_2:
-                eigval_product = eigenvals[..., 0] * eigenvals[..., 1]
-                gad_mag = torch.linalg.norm(gad_i, dim=-1, keepdim=True)
+                eigval_product = eigenvals[..., 0] * eigenvals[..., 1]  # B
+                gad_mag = torch.linalg.norm(gad_i, dim=-1, keepdim=True)  # B,D
                 # Avoid division by zero if you want gradients
                 # gad_mag += 1e-10
-                mask = eigval_product > 0
+                mask = eigval_product > 0  # B
                 min_norm = 1.0  # minimum norm we want
                 # only magnify small vectors, never shrink large ones
                 clip_coef = torch.clamp(min_norm / gad_mag, min=1.0)
@@ -168,7 +171,7 @@ class BaseEnergy:
 
                 # Scale coefficients by 1/|lambda|
                 L_abs = torch.abs(L)
-                mask = L_abs > 1e-8
+                mask = L_abs > 1e-6
 
                 scaled_coeffs = torch.zeros_like(coeffs)
                 scaled_coeffs[mask] = coeffs[mask] / L_abs[mask]
@@ -176,7 +179,7 @@ class BaseEnergy:
                 # Project back to spatial coordinates
                 # step = sum(scaled_c_i * v_i)
                 gad_i = (V @ scaled_coeffs.unsqueeze(-1)).squeeze(-1)
-                
+
             if self.newton_raphson_outside_ts:
                 # compute |H|^-1 * gad
                 L = eigenvals  # B,2
@@ -196,12 +199,12 @@ class BaseEnergy:
                 # Project back to spatial coordinates
                 # step = sum(scaled_c_i * v_i)
                 gad_scaled = (V @ scaled_coeffs.unsqueeze(-1)).squeeze(-1)
-                
+
                 eigval_product = eigenvals[..., 0] * eigenvals[..., 1]
-                mask = (eigval_product > 0)
+                mask = eigval_product > 0
                 gad_i = torch.where(
                     mask.unsqueeze(-1),
-                    gad_scaled, 
+                    gad_scaled,
                     gad_i,  # Leave unchanged
                 )
 
@@ -263,7 +266,7 @@ class BaseEnergy:
                     gad_i / gad_mag,  # norm to unity
                     gad_i,  # Leave unchanged
                 )
-                
+
             # GAD is a "force", we need to return the "gradient"
             gad_i = -gad_i * beta
             gad_vectors.append(gad_i)

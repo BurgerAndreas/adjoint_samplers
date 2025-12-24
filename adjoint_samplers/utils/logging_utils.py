@@ -28,8 +28,10 @@ REPLACE = {
     "beta_": "b",
     "energy.": "",
     "newton_raphson_then_norm_outside_ts": "nrnorm",
+    "newton_raphson_outside_ts": "nrouts",
     "newton_raphson": "nr",
     "norm_gad_outside_ts": "norm",
+    "gad=True": "gad",
 }
 
 REPLACE_HUMAN = {}
