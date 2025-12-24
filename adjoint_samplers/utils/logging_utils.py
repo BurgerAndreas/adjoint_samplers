@@ -26,6 +26,10 @@ REPLACE = {
     "linear": "lin",
     "decay_start_epoch": "start",
     "beta_": "b",
+    "energy.": "",
+    "newton_raphson_then_norm_outside_ts": "nrnorm",
+    "newton_raphson": "nr",
+    "norm_gad_outside_ts": "norm",
 }
 
 REPLACE_HUMAN = {}
