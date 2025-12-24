@@ -663,7 +663,7 @@ def render_medoids_and_grid(
         order = np.argsort(medoid_energies)
         energies_sorted = [medoid_energies[k] for k in order]
         # only get the idx (last character) of the label
-        labels_sorted = [medoid_labels[k][-1] for k in order] 
+        labels_sorted = [medoid_labels[k][-1] for k in order]
         sns.reset_defaults()
         sns.set_theme(context="poster", palette="deep", font_scale=0.6)
         fig, ax = plt.subplots(figsize=(8, 6))
@@ -743,6 +743,7 @@ def plot_energy_distance_hist(
     energy_max=None,
     dist_min=None,
     dist_max=None,
+    vert_lines=None,
 ):
     """Plot energy and interatomic distance histograms and log to eval_dict."""
     print("Plotting energy and distance histograms...")
@@ -775,6 +776,9 @@ def plot_energy_distance_hist(
             dmin = dist_min if dist_min is not None else axes[1].get_xlim()[0]
             dmax = dist_max if dist_max is not None else axes[1].get_xlim()[1]
             axes[1].set_xlim(dmin, dmax)
+        if vert_lines is not None:
+            for x in vert_lines:
+                axes[1].axvline(x=x, color="black", linestyle="--", linewidth=1)
     else:
         axes[1].text(
             0.5,

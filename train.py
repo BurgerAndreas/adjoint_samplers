@@ -324,6 +324,7 @@ def main(cfg):
                         energy_max=getattr(cfg, "energy_max", None),
                         dist_min=getattr(cfg, "dist_min", None),
                         dist_max=getattr(cfg, "dist_max", None),
+                        vert_lines=getattr(cfg, "vert_lines", None),
                     )
 
                     #####################

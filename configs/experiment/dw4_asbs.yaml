@@ -50,7 +50,7 @@ corrector_matcher:
 
 
 # === eval & logging ===
-use_wandb: true
+eval_freq: 200
 
 # plotting axis limits
 energy_min: null

@@ -13,7 +13,9 @@ class GradEnergy:
 
     def clip(self, grad_E):
         if self.max_grad_E_norm is not None:
+            # Calculate norm over the spatial dimensions (dim=-1) 
             norm = torch.linalg.vector_norm(grad_E, dim=-1).detach()
+            # only shrink large vectors, never magnify small ones
             clip_coefficient = torch.clamp(self.max_grad_E_norm / (norm + 1e-6), max=1)
             clip_coefficient = clip_coefficient.unsqueeze(-1)
         else:

@@ -52,9 +52,10 @@ class DoubleWellEnergy(BaseEnergy):
         n_particles,
         device="cpu",
         gad=False,
+        **kwargs,
     ):
         # Set the name and dim
-        super().__init__(f"dw{n_particles}", dim, gad=gad)
+        super().__init__(f"dw{n_particles}", dim, gad=gad, **kwargs)
 
         self.n_particles = n_particles
         self.n_spatial_dim = dim // n_particles

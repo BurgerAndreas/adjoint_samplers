@@ -32,6 +32,7 @@ energy_min: null
 energy_max: null
 dist_min: null
 dist_max: null
+vert_lines: null
 draw_label_cutoff: 3.8
 draw_label_max_pairs: 10
 
@@ -54,6 +55,15 @@ temperature:
   beta_end: 1.0       # used for linear decay over total batches
   decay_start_epoch: 0  # linear decay begins after this epoch (0-based)
 
+# add args here so we can override them later
+energy:
+  gad: false
+  norm_gad_outside_ts: false
+  norm_gad_outside_ts_2: false
+  newton_raphson: false
+  newton_raphson_2: false
+  newton_raphson_then_norm_outside_ts: false
+
 # === paths  ===
 # dataset:
 #   datapath: /project/aip-aspuru/aburger/Transition1x/data/transition1x.h5
@@ -69,6 +79,7 @@ temperature:
 
 # === logging  ===
 use_wandb: True
+eval_freq: 200
 slurm_job_id: null
 save_ckpt: true
 

@@ -239,6 +239,7 @@ class ScineEnergy(BaseEnergy):
         n_jobs: int = 10,
         device: str = "cpu",
         gad: bool = False,
+        **kwargs,
     ):
         # Prefer molecule over elements if both provided
         if molecule is not None:
@@ -260,7 +261,7 @@ class ScineEnergy(BaseEnergy):
         dim = self.n_particles * self.n_spatial_dim
 
         # Set name based on functional
-        super().__init__(name=f"scine_{functional}", dim=dim, gad=gad)
+        super().__init__(name=f"scine_{functional}", dim=dim, gad=gad, **kwargs)
 
     def eval(self, x: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
         """Compute energy for batch of molecular geometries.

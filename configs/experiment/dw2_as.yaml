@@ -1,7 +1,7 @@
 # @package _global_
 
 defaults:
-  - /problem: dw4
+  - /problem: dw2
   - /source: delta
   - /sde@ref_sde: graph_ve
   - /model@controller: egnn
@@ -9,7 +9,7 @@ defaults:
   - /term_cost: graph_score_term_cost
   - /matcher@adjoint_matcher: adjoint_ve
 
-exp_name: dw4_as
+exp_name: dw2_as
 
 # === sde ===
 nfe: 200
@@ -35,7 +35,8 @@ adjoint_matcher:
 # === eval & logging ===
 eval_freq: 200
 
-# plotting axis limits
+# === plotting ===
+# axis limits
 energy_min: null
 energy_max: null
 dist_min: 0

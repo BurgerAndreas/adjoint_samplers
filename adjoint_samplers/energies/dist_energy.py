@@ -10,9 +10,9 @@ class DistEnergy(BaseEnergy):
     """An energy function given a distribution"""
 
     def __init__(
-        self, dist: Distribution, device: str = "cpu", gad: bool = False
+        self, dist: Distribution, device: str = "cpu", gad: bool = False, **kwargs
     ) -> None:
-        super().__init__(name=dist.name, dim=dist.dim, gad=gad)
+        super().__init__(name=dist.name, dim=dist.dim, gad=gad, **kwargs)
         self.dist = dist
         self.dist.to(device)
         self.device = device

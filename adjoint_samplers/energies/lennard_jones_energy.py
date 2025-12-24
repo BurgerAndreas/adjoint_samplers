@@ -110,9 +110,10 @@ class LennardJonesEnergy(BaseEnergy):
         oscillator=True,
         device="cpu",
         gad=False,
+        **kwargs,
     ):
         # Set the name and dim
-        super().__init__(f"lj{n_particles}", dim, gad=gad)
+        super().__init__(f"lj{n_particles}", dim, gad=gad, **kwargs)
 
         self.n_particles = n_particles
         self.n_spatial_dim = dim // n_particles
