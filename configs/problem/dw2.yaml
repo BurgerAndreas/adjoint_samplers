@@ -14,3 +14,5 @@ evaluator:
   _target_: adjoint_samplers.components.evaluator.NullEvaluator
   ref_samples_path: null
   do_particles_w2: false
+
+vert_lines: [2.5, 4.5]
