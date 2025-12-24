@@ -15,6 +15,7 @@ class BaseEnergy:
         newton_raphson=False,
         newton_raphson_2=False,
         newton_raphson_then_norm_outside_ts=False,
+        newton_raphson_outside_ts=False,
     ):
         super().__init__()
         self.name = name
@@ -25,6 +26,7 @@ class BaseEnergy:
         self.newton_raphson = newton_raphson
         self.newton_raphson_2 = newton_raphson_2
         self.newton_raphson_then_norm_outside_ts = newton_raphson_then_norm_outside_ts
+        self.newton_raphson_outside_ts = newton_raphson_outside_ts
 
     def check_norm_strategy(self) -> bool:
         # only at max one can be true at the same time
@@ -34,6 +36,7 @@ class BaseEnergy:
             self.newton_raphson,
             self.newton_raphson_2,
             self.newton_raphson_then_norm_outside_ts,
+            self.newton_raphson_outside_ts,
         ]
         return sum(_all) <= 1
 
@@ -173,6 +176,34 @@ class BaseEnergy:
                 # Project back to spatial coordinates
                 # step = sum(scaled_c_i * v_i)
                 gad_i = (V @ scaled_coeffs.unsqueeze(-1)).squeeze(-1)
+                
+            if self.newton_raphson_outside_ts:
+                # compute |H|^-1 * gad
+                L = eigenvals  # B,2
+                V = eigenvecs  # B,2,2
+                # gad: B,2
+                # Project Force onto Eigenbasis (change of coordinates)
+                # Coefficients c_i = v_i dot F # B,2
+                coeffs = (V.transpose(-1, -2) @ gad_i.unsqueeze(-1)).squeeze(-1)
+
+                # Scale coefficients by 1/|lambda|
+                L_abs = torch.abs(L)
+                mask = L_abs > 1e-8
+
+                scaled_coeffs = torch.zeros_like(coeffs)
+                scaled_coeffs[mask] = coeffs[mask] / L_abs[mask]
+
+                # Project back to spatial coordinates
+                # step = sum(scaled_c_i * v_i)
+                gad_scaled = (V @ scaled_coeffs.unsqueeze(-1)).squeeze(-1)
+                
+                eigval_product = eigenvals[..., 0] * eigenvals[..., 1]
+                mask = (eigval_product > 0)
+                gad_i = torch.where(
+                    mask.unsqueeze(-1),
+                    gad_scaled, 
+                    gad_i,  # Leave unchanged
+                )
 
             if self.newton_raphson_2:
                 abs_eigvals = torch.abs(eigenvals)
