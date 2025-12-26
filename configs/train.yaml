@@ -16,15 +16,16 @@ save_freq: 100
 
 # how many samples to cluster, null means use all samples. More are more accurate but slower to cluster
 num_samples_clustering: 1000
-# whether to perform clustering by pairwise RMSD (can be slow for large sample sets)
-cluster_by_rmsd: true
 # whether to perform clustering by MBTR (Many-Body Tensor Representation) descriptors (can be slow for large sample sets)
 cluster_by_mbtr: false
 # maximum number of samples to use for 2D projection (t-SNE/UMAP) for performance
 max_samples_projection: 1000
 hdbscan:
   # minimum cluster size for HDBSCAN clustering
-  min_samples: 15
+  min_cluster_size: 15
+  # min_samples: null  # optional, controls how conservative clustering is
+  # cluster_selection_epsilon merges clusters within this RMSD distance (more conservative)
+  cluster_selection_epsilon: 0.5
 rmsd_num_workers: 10
 
 # optional axis limits for plotting

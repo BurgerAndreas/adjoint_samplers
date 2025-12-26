@@ -23,12 +23,10 @@ from adjoint_samplers.train_loop import train_one_epoch
 import adjoint_samplers.utils.train_utils as train_utils
 import adjoint_samplers.utils.distributed_mode as distributed_mode
 from adjoint_samplers.utils.eval_utils import (
-    interatomic_dist,
     fig2img,
     build_xyz_from_positions,
     render_xyz_grid,
     render_xyz_to_png,
-    cluster_intradist,
     cluster_rmsd,
     cluster_mbtr,
     run_frequency_analysis,
@@ -328,7 +326,7 @@ def main(cfg):
                     )
 
                     #####################
-                    # Cluster samples by pairwise distance vectors to approximate modes
+                    # Cluster samples by RMSD to approximate modes
                     #####################
                     if hasattr(energy, "n_particles") and hasattr(
                         energy, "n_spatial_dim"
@@ -337,20 +335,14 @@ def main(cfg):
                             cluster_samples = samples
                         else:
                             cluster_samples = samples[: cfg.num_samples_clustering]
-                        distances_cluster = interatomic_dist(
-                            cluster_samples, energy.n_particles, energy.n_spatial_dim
-                        ).detach()
 
-                        medoid_indices_intradist, cluster_labels_intradist = (
-                            cluster_intradist(
-                                distances_cluster,
-                                cluster_samples,
-                                energy,
-                                cfg,
-                                eval_dir,
-                                eval_dict,
-                                tag="intradist",
-                            )
+                        medoid_indices_rmsd, cluster_labels_rmsd = cluster_rmsd(
+                            cluster_samples,
+                            energy,
+                            cfg,
+                            eval_dir,
+                            eval_dict,
+                            tag="rmsd",
                         )
 
                         # Plot 2D projections
@@ -360,28 +352,10 @@ def main(cfg):
                             energy,
                             eval_dir,
                             eval_dict,
-                            tag="intradist",
-                            cluster_labels=cluster_labels_intradist,
+                            tag="rmsd",
+                            cluster_labels=cluster_labels_rmsd,
                             n_samples_max=max_samples_proj,
                         )
-
-                        if getattr(cfg, "cluster_by_rmsd", False):
-                            medoid_indices_ordered_rmsd = cluster_rmsd(
-                                cluster_samples,
-                                energy,
-                                cfg,
-                                eval_dir,
-                                eval_dict,
-                                tag="rmsd",
-                            )
-                            run_frequency_analysis(
-                                medoid_indices_ordered_rmsd,
-                                cluster_samples,
-                                energy,
-                                eval_dict,
-                                tag="rmsd",
-                                beta=beta_eval,
-                            )
 
                         if getattr(cfg, "cluster_by_mbtr", False):
                             medoid_indices_mbtr = cluster_mbtr(
@@ -402,11 +376,11 @@ def main(cfg):
                             )
 
                         run_frequency_analysis(
-                            medoid_indices_intradist,
+                            medoid_indices_rmsd,
                             cluster_samples,
                             energy,
                             eval_dict,
-                            tag="intradist",
+                            tag="rmsd",
                             beta=beta_eval,
                         )
 
