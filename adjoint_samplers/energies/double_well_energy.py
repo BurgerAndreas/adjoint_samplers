@@ -116,8 +116,7 @@ class DoubleWellEnergy(BaseEnergy):
 
         # Compute distances: d_ij = ||x_i - x_j||
         # Shape: (batch, n_particles, n_particles)
-        dists = torch.sqrt(torch.sum(diff**2, dim=-1))
-        # dists = torch.sqrt(torch.sum(diff**2, dim=-1) + 1e-8)
+        dists = torch.sqrt(torch.sum(diff**2, dim=-1) + 1e-8)
 
         # Compute d_shifted = d_ij - offset
         d_shifted = dists - offset
@@ -261,8 +260,8 @@ def compute_distances(x, n_particles, spatial_dim, remove_duplicates=True):
         x[:, :, None, :] - x[:, None, :, :]
     )  # Shape: (batch, n_particles, n_particles, spatial_dim)
     distances = torch.sqrt(
-        torch.sum(diff**2, axis=-1)
-        # torch.sum(diff**2, axis=-1) + 1e-8
+        # torch.sum(diff**2, axis=-1)
+        torch.sum(diff**2, axis=-1) + 1e-8
     )  # Shape: (batch, n_particles, n_particles)
     if remove_duplicates:
         distances = distances[
