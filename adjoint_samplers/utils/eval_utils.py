@@ -1060,7 +1060,7 @@ def cluster_rmsd(samples, energy, cfg, eval_dir, eval_dict, tag="rmsd"):
         draw_label_cutoff=getattr(cfg, "draw_label_cutoff", 3.8),
         draw_label_max_pairs=getattr(cfg, "draw_label_max_pairs", 10),
     )
-    return medoid_indices_rmsd
+    return medoid_indices_rmsd, labels_rmsd
 
 
 def cluster_mbtr(samples, energy, cfg, eval_dir, eval_dict, tag="mbtr"):
