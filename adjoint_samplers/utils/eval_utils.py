@@ -967,7 +967,7 @@ def cluster_intradist(
         print(f"[HDBSCAN {tag}] Using sorted distances (no atom type information)")
 
     dist_matrix_sorted = pairwise_distances(dist_features)
-    hdbscan_clusterer = hdbscan.HDBSCAN(min_cluster_size=cfg.hdbscan.min_samples)
+    hdbscan_clusterer = hdbscan.HDBSCAN(min_cluster_size=cfg.hdbscan.min_cluster_size)
     labels = hdbscan_clusterer.fit_predict(dist_features)
     medoid_indices, label_counts = select_medoids_from_labels(
         labels, dist_matrix_sorted
@@ -1141,7 +1141,7 @@ def cluster_mbtr(samples, energy, cfg, eval_dir, eval_dict, tag="mbtr"):
 
     # Perform HDBSCAN clustering
     hdbscan_clusterer_mbtr = hdbscan.HDBSCAN(
-        min_cluster_size=cfg.hdbscan.min_samples,
+        min_cluster_size=cfg.hdbscan.min_cluster_size,
         metric="precomputed",
     )
     labels_mbtr = hdbscan_clusterer_mbtr.fit_predict(mbtr_distance_matrix)
