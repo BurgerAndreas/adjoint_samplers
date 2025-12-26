@@ -31,7 +31,8 @@ REPLACE = {
     "newton_raphson_outside_ts": "nrouts",
     "newton_raphson": "nr",
     "norm_gad_outside_ts": "norm",
-    "gad=True": "gad",
+    "=True": "",
+    "_": "",
 }
 
 REPLACE_HUMAN = {}

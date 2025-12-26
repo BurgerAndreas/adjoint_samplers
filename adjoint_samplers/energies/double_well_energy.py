@@ -75,10 +75,6 @@ class DoubleWellEnergy(BaseEnergy):
     def eval(self, samples: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
         return self.multi_double_well._energy(samples).squeeze(-1) * beta
 
-    def _grad_E(self, samples: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
-        """Internal method to compute standard gradients analytically."""
-        return self.gradient_analytic(samples) * beta
-
     def grad_E(self, samples: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
         """Compute gradients for batch of samples.
 
@@ -88,10 +84,14 @@ class DoubleWellEnergy(BaseEnergy):
         if self.gad:
             return self._grad_E_gad(samples, beta=beta)
         return self._grad_E(samples, beta=beta)
+    
+    # def _grad_E(self, samples: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
+    #     """Internal method to compute standard gradients analytically."""
+    #     return self.gradient_analytic(samples) * beta
 
-    def hessian_E(self, samples: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
-        """Override to use analytical Hessian implementation."""
-        return self.hessian_analytic(samples) * beta
+    # def hessian_E(self, samples: torch.Tensor, beta: float = 1.0) -> torch.Tensor:
+    #     """Override to use analytical Hessian implementation."""
+    #     return self.hessian_analytic(samples) * beta
 
     def gradient_analytic(self, samples: torch.Tensor) -> torch.Tensor:
         """Compute gradient analytically.
@@ -116,7 +116,8 @@ class DoubleWellEnergy(BaseEnergy):
 
         # Compute distances: d_ij = ||x_i - x_j||
         # Shape: (batch, n_particles, n_particles)
-        dists = torch.sqrt(torch.sum(diff**2, dim=-1) + 1e-8)
+        dists = torch.sqrt(torch.sum(diff**2, dim=-1))
+        # dists = torch.sqrt(torch.sum(diff**2, dim=-1) + 1e-8)
 
         # Compute d_shifted = d_ij - offset
         d_shifted = dists - offset
@@ -260,7 +261,8 @@ def compute_distances(x, n_particles, spatial_dim, remove_duplicates=True):
         x[:, :, None, :] - x[:, None, :, :]
     )  # Shape: (batch, n_particles, n_particles, spatial_dim)
     distances = torch.sqrt(
-        torch.sum(diff**2, axis=-1) + 1e-8
+        torch.sum(diff**2, axis=-1)
+        # torch.sum(diff**2, axis=-1) + 1e-8
     )  # Shape: (batch, n_particles, n_particles)
     if remove_duplicates:
         distances = distances[

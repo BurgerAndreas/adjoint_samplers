@@ -64,6 +64,10 @@ energy:
   newton_raphson_2: false
   newton_raphson_then_norm_outside_ts: false
   newton_raphson_outside_ts: false
+  soft_clamp_gad_outside_ts: false
+  soft_clamp_scale: 100.0
+  soft_clamp_min_norm: 1.0
+  newton_raphson_then_soft_clamp_gad_outside_ts: false
 
 # === paths  ===
 # dataset:
