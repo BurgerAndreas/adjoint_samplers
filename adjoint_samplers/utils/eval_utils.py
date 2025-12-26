@@ -1038,7 +1038,9 @@ def cluster_rmsd(samples, energy, cfg, eval_dir, eval_dict, tag="rmsd"):
     eval_dict[f"rmsd_heatmap_{tag}"] = wandb.Image(rmsd_heatmap_img)
 
     hdbscan_clusterer_rmsd = hdbscan.HDBSCAN(
-        min_cluster_size=cfg.hdbscan.min_samples,
+        min_cluster_size=cfg.hdbscan.min_cluster_size,
+        min_samples=getattr(cfg.hdbscan, "min_samples", None),
+        cluster_selection_epsilon=getattr(cfg.hdbscan, "cluster_selection_epsilon", 0.0),
         metric="precomputed",
     )
     labels_rmsd = hdbscan_clusterer_rmsd.fit_predict(rmsd_matrix)
