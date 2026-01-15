@@ -3,8 +3,8 @@
 Export Transition1x isopropanol (C3H8O) reaction triplets (R, TS, P) and plot.
 
 Writes:
-  - data/transition1x_isopropanol_C3H8O_triplets.lmdb (LMDB of torch tensor dicts, one per reaction)
-  - plots/transition1x_isopropanol_C3H8O/rxnXXXX_triplet.png (one per reaction)
+  - data/t1x_isopropanol_C3H8O_triplets.lmdb (LMDB of torch tensor dicts, one per reaction)
+  - plots/t1x_isopropanol_C3H8O/rxnXXXX_triplet.png (one per reaction)
 """
 
 from __future__ import annotations
@@ -77,7 +77,7 @@ def main():
     parser.add_argument(
         "--out-lmdb",
         type=str,
-        default="data/tx_isopropanol_C3H8O_triplets.lmdb",
+        default="data/t1x_isopropanol_C3H8O_triplets.lmdb",
     )
     parser.add_argument(
         "--plot-dir",

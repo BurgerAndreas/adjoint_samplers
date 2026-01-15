@@ -13,6 +13,9 @@ defaults:
 
 exp_name: isopropanol_asbs
 
+gt_file: null # path to ground truth geometry sample for evaluation
+gt_key: null # key to extract ground truth geometry from the file. can be a list of keys.
+
 # === molecule configuration ===
 # isopropanol: C3H8O (12 atoms)
 molecule: c3h8o

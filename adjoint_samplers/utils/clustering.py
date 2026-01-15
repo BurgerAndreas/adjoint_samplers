@@ -95,26 +95,26 @@ def compute_rmsd_matrix(samples, energy, cfg, eval_dir, eval_dict, tag="rmsd"):
             rmsd_matrix[start_idx:end_idx] += block
     rmsd_matrix = rmsd_matrix + rmsd_matrix.T
 
-    # Plot RMSD matrix as heatmap
-    fig, ax = plt.subplots(figsize=(10, 8))
-    sns.heatmap(
-        rmsd_matrix,
-        cmap="viridis",
-        square=True,
-        cbar_kws={"label": "RMSD"},
-        ax=ax,
-    )
-    ax.set_title(f"Pairwise RMSD Matrix ({tag})")
-    ax.set_xlabel("Sample Index")
-    ax.set_ylabel("Sample Index")
-    plt.tight_layout()
-    fig.canvas.draw()
-    rmsd_heatmap_img = fig2img(fig)
-    fname = eval_dir / f"rmsd_heatmap_{tag}.png"
-    rmsd_heatmap_img.save(fname)
-    print(f"Saved RMSD heatmap ({tag}) to\n {fname.resolve()}")
-    plt.close(fig)
-    eval_dict[f"rmsd_heatmap_{tag}"] = wandb.Image(rmsd_heatmap_img)
+    # # Plot RMSD matrix as heatmap
+    # fig, ax = plt.subplots(figsize=(10, 8))
+    # sns.heatmap(
+    #     rmsd_matrix,
+    #     cmap="viridis",
+    #     square=True,
+    #     cbar_kws={"label": "RMSD"},
+    #     ax=ax,
+    # )
+    # ax.set_title(f"Pairwise RMSD Matrix ({tag})")
+    # ax.set_xlabel("Sample Index")
+    # ax.set_ylabel("Sample Index")
+    # plt.tight_layout()
+    # fig.canvas.draw()
+    # rmsd_heatmap_img = fig2img(fig)
+    # fname = eval_dir / f"rmsd_heatmap_{tag}.png"
+    # rmsd_heatmap_img.save(fname)
+    # print(f"Saved RMSD heatmap ({tag}) to\n {fname.resolve()}")
+    # plt.close(fig)
+    # eval_dict[f"rmsd_heatmap_{tag}"] = wandb.Image(rmsd_heatmap_img)
 
     return rmsd_matrix
 

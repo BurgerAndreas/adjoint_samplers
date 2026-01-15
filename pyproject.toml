@@ -57,6 +57,7 @@ dependencies = [
     "scine-utilities",
     "scine-sparrow",
     "tbb==2022.3.0",
+    "sella",
 ]
 
 [tool.hatch.metadata]
