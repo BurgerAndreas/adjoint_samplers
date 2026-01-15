@@ -177,5 +177,7 @@ cython_debug/
 core.*
 results/*
 data/*
+wandb
+outputs
 
 *.png

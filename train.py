@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import PIL
 import wandb
 from tqdm import tqdm
+from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR, ReduceLROnPlateau
 
 from adjoint_samplers.components.sde import ControlledSDE, sdeint
 from adjoint_samplers.train_loop import train_one_epoch
@@ -27,19 +28,28 @@ from adjoint_samplers.utils.eval_utils import (
     build_xyz_from_positions,
     render_xyz_grid,
     render_xyz_to_png,
-    cluster_rmsd,
-    cluster_mbtr,
-    run_frequency_analysis,
-    _get_atom_types_from_energy,
     plot_energy_distance_hist,
-    plot_2d_projection,
+    run_frequency_analysis,
+)
+from adjoint_samplers.utils.clustering import (
+    plot_2d_projection_rmsd,
+    cluster_rmsd_hdbscan,
+    cluster_mbtr,
+    compute_rmsd_matrix,
+    cluster_rmsd_density_peaks
 )
 from adjoint_samplers.utils.logging_utils import name_from_config
 from adjoint_samplers.energies.scine_energy import (
     count_atoms_in_molecule,
 )
 
+import pickle
+import lmdb
 
+# PyTorch runs a short benchmark during the first iteration of your model 
+# to find the most efficient convolution algorithm 
+# for the specific hardware and input size.
+# only use if the input remains constant
 cudnn.benchmark = True
 
 # Register Hydra resolvers for molecule-based configs
@@ -78,8 +88,54 @@ def magenta(content):
     return termcolor.colored(str(content), "magenta", attrs=["bold"])
 
 
+def load_gt_geometries_from_lmdb(gt_file: str, gt_key) -> list:
+    """
+    Load ground truth geometries from an LMDB file.
+    
+    Args:
+        gt_file: Path to the LMDB file
+        gt_key: Key or list of keys to extract from each entry.
+                e.g., "transition_state_positions" or 
+                ["reactant_positions", "product_positions"]
+    
+    Returns:
+        List of geometry dicts, where each dict contains the requested tensors
+    """
+    geometries = []
+    
+    # Normalize gt_key to a list
+    if isinstance(gt_key, str):
+        keys = [gt_key]
+    else:
+        keys = list(gt_key)
+    
+    with lmdb.open(gt_file, readonly=True, subdir=False, lock=False) as env:
+        with env.begin() as txn:
+            cursor = txn.cursor()
+            for key, value in cursor:
+                item = pickle.loads(value)
+                geometry = {}
+                for k in keys:
+                    if k in item:
+                        geometry[k] = item[k]
+                    else:
+                        raise KeyError(f"Key '{k}' not found in LMDB entry with id={key.decode()}")
+                # Also store atomic numbers if available
+                if "atomic_numbers" in item:
+                    geometry["atomic_numbers"] = item["atomic_numbers"]
+                if "rxn_id" in item:
+                    geometry["rxn_id"] = item["rxn_id"]
+                geometries.append(geometry)
+    
+    return geometries
+
+
 @hydra.main(config_path="configs", config_name="train.yaml", version_base="1.1")
 def main(cfg):
+    
+    #########################################################
+    # Fix config
+    #########################################################
     try:
         # Update dim and n_particles from energy.molecule if it exists
         # This handles cases where energy.molecule is overridden directly (e.g., energy.molecule=h1c1n1)
@@ -96,6 +152,37 @@ def main(cfg):
                 cfg.dim = n_particles * 3
                 if was_struct:
                     OmegaConf.set_struct(cfg, True)
+        
+        # Add SLURM job ID to config if it exists in environment
+        if "SLURM_JOB_ID" in os.environ:
+            cfg.slurm_job_id = os.environ["SLURM_JOB_ID"]
+        print(f"SLURM job ID: {cfg.slurm_job_id}")
+
+        print("Instantiating writer with wandb...")
+        run_name = name_from_config(cfg)
+        writer = train_utils.Writer(
+            name=run_name,  # cfg.exp_name
+            cfg=cfg,
+            is_main_process=distributed_mode.is_main_process(),
+        )
+        
+        # use the wandb run id if available
+        runid = "loc"
+        if wandb.run is not None:
+            runid = wandb.run.id
+            
+        # fix paths
+        if not os.path.exists(cfg.scratch_dir):
+            print(f"Scratch directory {cfg.scratch_dir} does not exist, using default ./results")
+            cfg.scratch_dir = str(Path("./results").resolve())
+        # for checkpoints and distributed
+        cfg.shared_dir = cfg.scratch_dir + "/" + runid + "_" + str(cfg.slurm_job_id) + "/" + cfg.shared_dir
+        os.makedirs(cfg.shared_dir, exist_ok=True)
+        # for plots and results
+        cfg.output_dir = cfg.scratch_dir + "/" + runid + "_" + str(cfg.slurm_job_id) + "/" + cfg.output_dir
+        os.makedirs(cfg.output_dir, exist_ok=True)
+        eval_dir = Path(cfg.output_dir + "/eval_figs")
+        os.makedirs(eval_dir, exist_ok=True)
 
         train_utils.setup(cfg)
         # print(str(cfg))
@@ -106,6 +193,13 @@ def main(cfg):
         seed = cfg.seed + distributed_mode.get_rank()
         torch.manual_seed(seed)
         np.random.seed(seed)
+
+        # Load ground truth geometries if specified
+        gt_geometries = None
+        if cfg.gt_file is not None:
+            print(f"Loading ground truth geometries from {cfg.gt_file}...")
+            gt_geometries = load_gt_geometries_from_lmdb(cfg.gt_file, cfg.gt_key)
+            print(f"Loaded {len(gt_geometries)} ground truth geometries")
 
         print("Instantiating energy...")
         energy = hydra.utils.instantiate(cfg.energy, device=device)
@@ -142,7 +236,6 @@ def main(cfg):
         )
 
         print("Instantiating optimizer...")
-        lr_schedule = None  # TODO(ghliu) add scheduler
         if corrector is not None:
             optimizer = torch.optim.Adam(
                 [
@@ -156,7 +249,50 @@ def main(cfg):
                 **cfg.adjoint_matcher.optim,
             )
 
-        checkpoint_path = Path(cfg.checkpoint or "checkpoints/checkpoint_latest.pt")
+        # Instantiate learning rate scheduler
+        lr_schedule = None
+        if hasattr(cfg, "scheduler") and cfg.scheduler is not None:
+            scheduler_type = cfg.scheduler.get("type", None)
+            if scheduler_type == "cosine":
+                # Cosine annealing with warmup
+                warmup_epochs = cfg.scheduler.get("warmup_epochs", 0)
+                min_lr = cfg.scheduler.get("min_lr", 0.0)
+                T_max = cfg.num_epochs - warmup_epochs
+                if warmup_epochs > 0:
+                    warmup_scheduler = LinearLR(
+                        optimizer,
+                        start_factor=1e-8 / cfg.adjoint_matcher.optim.lr,
+                        end_factor=1.0,
+                        total_iters=warmup_epochs,
+                    )
+                    cosine_scheduler = CosineAnnealingLR(
+                        optimizer,
+                        T_max=T_max,
+                        eta_min=min_lr,
+                    )
+                    lr_schedule = SequentialLR(
+                        optimizer,
+                        schedulers=[warmup_scheduler, cosine_scheduler],
+                        milestones=[warmup_epochs],
+                    )
+                else:
+                    lr_schedule = CosineAnnealingLR(
+                        optimizer,
+                        T_max=cfg.num_epochs,
+                        eta_min=min_lr,
+                    )
+            elif scheduler_type == "plateau":
+                # Reduce on plateau
+                lr_schedule = ReduceLROnPlateau(
+                    optimizer,
+                    mode="min",
+                    factor=cfg.scheduler.get("factor", 0.5),
+                    patience=cfg.scheduler.get("patience", 10),
+                    min_lr=cfg.scheduler.get("min_lr", 1e-6),
+                    verbose=True,
+                )
+
+        checkpoint_path = Path(cfg.checkpoint or f"{cfg.shared_dir}/checkpoint_latest.pt")
         checkpoint_path.parent.mkdir(exist_ok=True)
         if checkpoint_path.exists():
             print(f"Loading checkpoint from {checkpoint_path}...")
@@ -182,22 +318,7 @@ def main(cfg):
                     corrector, device_ids=[cfg.gpu], find_unused_parameters=True
                 )
 
-        # Add SLURM job ID to config if it exists in environment
-        if "SLURM_JOB_ID" in os.environ:
-            cfg.slurm_job_id = os.environ["SLURM_JOB_ID"]
-        print(f"SLURM job ID: {cfg.slurm_job_id}")
-
-        print("Instantiating writer...")
-        run_name = name_from_config(cfg)
-        writer = train_utils.Writer(
-            name=run_name,  # cfg.exp_name
-            cfg=cfg,
-            is_main_process=distributed_mode.is_main_process(),
-        )
-
         print("Instantiating evaluator...")
-        eval_dir = Path("eval_figs")
-        eval_dir.mkdir(exist_ok=True)
         evaluator = hydra.utils.instantiate(cfg.evaluator, energy=energy)
 
         total_batches = cfg.num_epochs * cfg.train_itr_per_epoch
@@ -336,44 +457,83 @@ def main(cfg):
                         else:
                             cluster_samples = samples[: cfg.num_samples_clustering]
 
-                        medoid_indices_rmsd, cluster_labels_rmsd = cluster_rmsd(
+                        rmsd_matrix = compute_rmsd_matrix(cluster_samples, energy, cfg, eval_dir, eval_dict, tag="rmsd")
+                        medoid_indices_rmsd, cluster_labels_rmsd = cluster_rmsd_hdbscan(
                             cluster_samples,
                             energy,
                             cfg,
                             eval_dir,
                             eval_dict,
+                            rmsd_matrix=rmsd_matrix,
                             tag="rmsd",
                         )
 
                         # Plot 2D projections
                         max_samples_proj = getattr(cfg, "max_samples_projection", 5000)
-                        plot_2d_projection(
+                        plot_2d_projection_rmsd(
                             cluster_samples,
                             energy,
                             eval_dir,
                             eval_dict,
+                            cfg=cfg,
                             tag="rmsd",
                             cluster_labels=cluster_labels_rmsd,
                             n_samples_max=max_samples_proj,
+                            rmsd_matrix=rmsd_matrix,
                         )
-
-                        if getattr(cfg, "cluster_by_mbtr", False):
-                            medoid_indices_mbtr = cluster_mbtr(
+                        
+                        # Cluster using density peaks algorithm
+                        if getattr(cfg, "cluster_by_density_peaks", False):
+                            cluster_centers_dp, cluster_labels_dp = cluster_rmsd_density_peaks(
                                 cluster_samples,
                                 energy,
                                 cfg,
                                 eval_dir,
                                 eval_dict,
-                                tag="mbtr",
+                                tag="rmsd_density_peaks",
+                                beta=beta_eval,
                             )
+                            
+                            # Plot 2D projections with density peaks clusters
+                            plot_2d_projection_rmsd(
+                                cluster_samples,
+                                energy,
+                                eval_dir,
+                                eval_dict,
+                                cfg=cfg,
+                                tag="rmsd_density_peaks",
+                                cluster_labels=cluster_labels_dp,
+                                n_samples_max=max_samples_proj,
+                                rmsd_matrix=rmsd_matrix,
+                            )
+                            
+                            # Run frequency analysis on density peaks cluster centers
                             run_frequency_analysis(
-                                medoid_indices_mbtr,
+                                cluster_centers_dp,
                                 cluster_samples,
                                 energy,
                                 eval_dict,
-                                tag="mbtr",
+                                tag="rmsd_density_peaks",
                                 beta=beta_eval,
                             )
+
+                        # if getattr(cfg, "cluster_by_mbtr", False):
+                        #     medoid_indices_mbtr = cluster_mbtr(
+                        #         cluster_samples,
+                        #         energy,
+                        #         cfg,
+                        #         eval_dir,
+                        #         eval_dict,
+                        #         tag="mbtr",
+                        #     )
+                        #     run_frequency_analysis(
+                        #         medoid_indices_mbtr,
+                        #         cluster_samples,
+                        #         energy,
+                        #         eval_dict,
+                        #         tag="mbtr",
+                        #         beta=beta_eval,
+                        #     )
 
                         run_frequency_analysis(
                             medoid_indices_rmsd,
@@ -396,6 +556,7 @@ def main(cfg):
                         adjoint_matcher,
                         corrector=corrector,
                         corrector_matcher=corrector_matcher,
+                        ckpt_dir=Path(cfg.shared_dir),
                     )
 
     except Exception as e:

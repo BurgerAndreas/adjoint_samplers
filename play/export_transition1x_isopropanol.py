@@ -3,7 +3,7 @@
 Export Transition1x isopropanol (C3H8O) reaction triplets (R, TS, P) and plot.
 
 Writes:
-  - data/transition1x_isopropanol_C3H8O_triplets.npz
+  - data/transition1x_isopropanol_C3H8O_triplets.lmdb (LMDB of torch tensor dicts, one per reaction)
   - plots/transition1x_isopropanol_C3H8O/rxnXXXX_triplet.png (one per reaction)
 """
 
@@ -17,9 +17,11 @@ import h5py
 import numpy as np
 import PIL.Image
 from matplotlib import pyplot as plt
+import torch
+import lmdb
+import pickle
 
 from adjoint_samplers.utils.eval_utils import render_xyz_to_png
-
 
 REFERENCE_ENERGIES = {
     1: -13.62222753701504,  # H
@@ -73,14 +75,14 @@ def main():
     parser.add_argument("--datasplit", type=str, default="data")
     parser.add_argument("--formula", type=str, default="C3H8O")
     parser.add_argument(
-        "--out-npz",
+        "--out-lmdb",
         type=str,
-        default="data/transition1x_isopropanol_C3H8O_triplets.npz",
+        default="data/tx_isopropanol_C3H8O_triplets.lmdb",
     )
     parser.add_argument(
-        "--out-dir",
+        "--plot-dir",
         type=str,
-        default="plots/transition1x_isopropanol_C3H8O",
+        default="plots/t1x_isopropanol_C3H8O",
     )
     parser.add_argument("--width", type=int, default=450)
     parser.add_argument("--height", type=int, default=450)
@@ -89,34 +91,21 @@ def main():
     h5_path = args.h5_path
     datasplit = args.datasplit
     formula = args.formula
-    out_npz = Path(args.out_npz)
-    out_dir = Path(args.out_dir)
+    out_lmdb = Path(args.out_lmdb)
+    plot_dir = Path(args.plot_dir)
 
-    out_npz.parent.mkdir(parents=True, exist_ok=True)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    out_lmdb.parent.mkdir(parents=True, exist_ok=True)
+    plot_dir.mkdir(parents=True, exist_ok=True)
 
-    with h5py.File(h5_path, "r") as f:
+    # Extract and write LMDB
+    with h5py.File(h5_path, "r") as f, lmdb.open(
+        str(out_lmdb), map_size=int(200 * 1024 * 1024), subdir=False
+    ) as env:
         formula_grp = f[datasplit][formula]
         rxn_ids = sorted(formula_grp.keys())
 
-        # Extract one entry per state for each rxn.
-        atomic_numbers = []
-        r_positions = []
-        r_forces = []
-        r_energy = []
-        r_atom_e = []
-
-        p_positions = []
-        p_forces = []
-        p_energy = []
-        p_atom_e = []
-
-        ts_positions = []
-        ts_forces = []
-        ts_energy = []
-        ts_atom_e = []
-
-        for rxn_id in rxn_ids:
+        txn = env.begin(write=True)
+        for idx, rxn_id in enumerate(rxn_ids):
             rxn_grp = formula_grp[rxn_id]
 
             z_r, pos_r, frc_r, e_r, ae_r = extract_entry(rxn_grp, formula, rxn_id, "reactant")
@@ -128,79 +117,80 @@ def main():
             if not np.array_equal(z_r, z_p) or not np.array_equal(z_r, z_ts):
                 raise ValueError(f"atomic_numbers mismatch across states in {rxn_id}")
 
-            atomic_numbers.append(z_r)
-            r_positions.append(pos_r)
-            r_forces.append(frc_r)
-            r_energy.append(e_r)
-            r_atom_e.append(ae_r)
+            item = {
+                "rxn_id": rxn_id,
+                "atomic_numbers": torch.tensor(z_r, dtype=torch.int64),
+                "reactant_positions": torch.tensor(pos_r, dtype=torch.float64),
+                "reactant_forces": torch.tensor(frc_r, dtype=torch.float64),
+                "reactant_energy": torch.tensor(e_r, dtype=torch.float64),
+                "reactant_atomization_energy": torch.tensor(ae_r, dtype=torch.float64),
+                "product_positions": torch.tensor(pos_p, dtype=torch.float64),
+                "product_forces": torch.tensor(frc_p, dtype=torch.float64),
+                "product_energy": torch.tensor(e_p, dtype=torch.float64),
+                "product_atomization_energy": torch.tensor(ae_p, dtype=torch.float64),
+                "transition_state_positions": torch.tensor(pos_ts, dtype=torch.float64),
+                "transition_state_forces": torch.tensor(frc_ts, dtype=torch.float64),
+                "transition_state_energy": torch.tensor(e_ts, dtype=torch.float64),
+                "transition_state_atomization_energy": torch.tensor(ae_ts, dtype=torch.float64),
+            }
+            key = rxn_id.encode("utf-8")
+            txn.put(key, pickle.dumps(item))
 
-            p_positions.append(pos_p)
-            p_forces.append(frc_p)
-            p_energy.append(e_p)
-            p_atom_e.append(ae_p)
+            # Optionally commit every 100
+            if (idx + 1) % 100 == 0:
+                txn.commit()
+                txn = env.begin(write=True)
 
-            ts_positions.append(pos_ts)
-            ts_forces.append(frc_ts)
-            ts_energy.append(e_ts)
-            ts_atom_e.append(ae_ts)
-
-    rxn_ids_arr = np.asarray(rxn_ids, dtype=str)
-    atomic_numbers_arr = np.asarray(atomic_numbers, dtype=int)
-
-    np.savez_compressed(
-        out_npz,
-        rxn_ids=rxn_ids_arr,
-        atomic_numbers=atomic_numbers_arr,
-        reactant_positions=np.asarray(r_positions, dtype=float),
-        reactant_forces=np.asarray(r_forces, dtype=float),
-        reactant_energy=np.asarray(r_energy, dtype=float),
-        reactant_atomization_energy=np.asarray(r_atom_e, dtype=float),
-        product_positions=np.asarray(p_positions, dtype=float),
-        product_forces=np.asarray(p_forces, dtype=float),
-        product_energy=np.asarray(p_energy, dtype=float),
-        product_atomization_energy=np.asarray(p_atom_e, dtype=float),
-        transition_state_positions=np.asarray(ts_positions, dtype=float),
-        transition_state_forces=np.asarray(ts_forces, dtype=float),
-        transition_state_energy=np.asarray(ts_energy, dtype=float),
-        transition_state_atomization_energy=np.asarray(ts_atom_e, dtype=float),
-    )
+        txn.commit()
+        print(f"Saved LMDB with {len(rxn_ids)} items to {out_lmdb}")
 
     # Plot one 1x3 figure per reaction (R | TS | P)
-    for i, rxn_id in enumerate(rxn_ids_arr.tolist()):
-        z = atomic_numbers_arr[i]
-        xyz_r = build_xyz_from_positions_and_atomic_numbers(r_positions[i], z)
-        xyz_ts = build_xyz_from_positions_and_atomic_numbers(ts_positions[i], z)
-        xyz_p = build_xyz_from_positions_and_atomic_numbers(p_positions[i], z)
+    # Re-extract all for plotting
+    with h5py.File(h5_path, "r") as f:
+        formula_grp = f[datasplit][formula]
+        rxn_ids = sorted(formula_grp.keys())
 
-        img_r = PIL.Image.open(
-            io.BytesIO(render_xyz_to_png(xyz_r, width=args.width, height=args.height))
-        ).convert("RGB")
-        img_ts = PIL.Image.open(
-            io.BytesIO(render_xyz_to_png(xyz_ts, width=args.width, height=args.height))
-        ).convert("RGB")
-        img_p = PIL.Image.open(
-            io.BytesIO(render_xyz_to_png(xyz_p, width=args.width, height=args.height))
-        ).convert("RGB")
+        for i, rxn_id in enumerate(rxn_ids):
+            rxn_grp = formula_grp[rxn_id]
+            z_r, pos_r, _, _, _ = extract_entry(rxn_grp, formula, rxn_id, "reactant")
+            z_p, pos_p, _, _, _ = extract_entry(rxn_grp, formula, rxn_id, "product")
+            z_ts, pos_ts, _, _, _ = extract_entry(rxn_grp, formula, rxn_id, "transition_state")
 
-        fig, axes = plt.subplots(1, 3, figsize=(9, 3), dpi=200)
-        for ax, img, title in zip(
-            axes,
-            [img_r, img_ts, img_p],
-            ["Reactant", "Transition state", "Product"],
-        ):
-            ax.imshow(img)
-            ax.set_title(title, fontsize=10)
-            ax.axis("off")
+            if not np.array_equal(z_r, z_p) or not np.array_equal(z_r, z_ts):
+                raise ValueError(f"atomic_numbers mismatch across states in {rxn_id}")
 
-        fig.suptitle(rxn_id, fontsize=12)
-        fig.tight_layout()
-        out_path = out_dir / f"{rxn_id}_triplet.png"
-        fig.savefig(out_path, bbox_inches="tight")
-        print(f"Saved {out_path}")
-        plt.close(fig)
+            xyz_r = build_xyz_from_positions_and_atomic_numbers(pos_r, z_r)
+            xyz_ts = build_xyz_from_positions_and_atomic_numbers(pos_ts, z_r)
+            xyz_p = build_xyz_from_positions_and_atomic_numbers(pos_p, z_r)
+
+            img_r = PIL.Image.open(
+                io.BytesIO(render_xyz_to_png(xyz_r, width=args.width, height=args.height))
+            ).convert("RGB")
+            img_ts = PIL.Image.open(
+                io.BytesIO(render_xyz_to_png(xyz_ts, width=args.width, height=args.height))
+            ).convert("RGB")
+            img_p = PIL.Image.open(
+                io.BytesIO(render_xyz_to_png(xyz_p, width=args.width, height=args.height))
+            ).convert("RGB")
+
+            fig, axes = plt.subplots(1, 3, figsize=(9, 3), dpi=200)
+            for ax, img, title in zip(
+                axes,
+                [img_r, img_ts, img_p],
+                ["Reactant", "Transition state", "Product"],
+            ):
+                ax.imshow(img)
+                ax.set_title(title, fontsize=10)
+                ax.axis("off")
+
+            fig.suptitle(rxn_id, fontsize=12)
+            fig.tight_layout()
+            out_path = plot_dir / f"{rxn_id}_triplet.png"
+            fig.savefig(out_path, bbox_inches="tight")
+            print(f"Saved {out_path}")
+            plt.close(fig)
 
 
 if __name__ == "__main__":
     main()
-
 

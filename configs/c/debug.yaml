@@ -22,21 +22,3 @@ num_epochs: 20
 use_wandb: False
 eval_freq: 19
 save_ckpt: false
-
-shared_dir: /checkpoint
-hydra:
-  run:
-    # dir: ./results/local/${now:%Y.%m.%d}/${now:%H%M%S}
-    dir: ./results/debug
-  # sweep:
-  #   dir: ./results/${now:%Y.%m.%d}/${now:%H%M%S}
-  #   subdir: ${hydra.job.num}
-  # launcher:
-  #   max_num_timeout: 100000
-  #   timeout_min: 4319
-  #   gpus_per_node: 1
-  #   tasks_per_node: ${hydra.launcher.gpus_per_node}
-  #   cpus_per_task: 10
-  #   nodes: 1
-  #   constraint: volta16gb
-  #   mem_per_gpu: 30gb

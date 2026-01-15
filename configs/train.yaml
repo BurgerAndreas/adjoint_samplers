@@ -37,6 +37,9 @@ vert_lines: null
 draw_label_cutoff: 3.8
 draw_label_max_pairs: 10
 
+gt_file: null # path to ground truth geometry sample for evaluation
+gt_key: null # key to extract ground truth geometry from the file. can be a list of keys.
+
 timesteps:
   t0: 0.0
   t1: 1.0
@@ -51,9 +54,9 @@ num_eval_samples: ${eval_batch_size}
 
 # temperature schedule
 temperature:
-  schedule: constant  # options: constant, linear
-  beta_start: 1.0     # used for constant and linear
-  beta_end: 1.0       # used for linear decay over total batches
+  schedule: linear  # options: constant, linear
+  beta_start: 1.0   # used for constant and linear
+  beta_end: 10.0    # used for linear decay over total batches
   decay_start_epoch: 0  # linear decay begins after this epoch (0-based)
 
 # add args here so we can override them later
@@ -92,6 +95,11 @@ save_ckpt: true
 # Stores the command line arguments overrides
 override_dirname: ${hydra:job.override_dirname}
 
+# scratch_dir: ./results
+scratch_dir: /scratch/aburger/as
+shared_dir: checkpoint
+output_dir: results
+
 hydra:
   job:
-    chdir: true
+    chdir: false

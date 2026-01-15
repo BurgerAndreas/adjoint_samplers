@@ -1,7 +1,7 @@
 # @package _global_
 
 defaults:
-  - /problem: dw2
+  - /problem: molecule
   - /source: harmonic # meanfree
   - /sde@ref_sde: graph_ve
   - /model@controller: egnn
@@ -11,18 +11,26 @@ defaults:
   - /model@corrector: egnn
   - /matcher@corrector_matcher: corrector
 
-exp_name: dw2_asbs
+exp_name: isopropanol_asbs
+
+# === molecule configuration ===
+# isopropanol: C3H8O (12 atoms)
+molecule: c3h8o
+
+# Override energy molecule parameter
+energy:
+  molecule: ${molecule}
+  functional: DFTB0
+  n_jobs: 10
 
 # === source ===
 scale: 2
 
-
 # === sde ===
 nfe: 200
 sigma_max: 1
-sigma_min: 0.001 # Use smaller sigma_max
+sigma_min: 0.001
 rescale_t: null # quad, cosine
-
 
 # === training ===
 num_epochs: 5000
@@ -48,16 +56,12 @@ corrector_matcher:
     lr: 1e-4
     weight_decay: 0
 
+# Reduce batch sizes for SCINE (much more expensive than toy energies)
+resample_batch_size: 64
+train_batch_size: 64
+eval_batch_size: 200
+num_eval_samples: ${eval_batch_size}
 
 # === eval & logging ===
 use_wandb: true
 
-# === plotting ===
-# axis limits
-energy_min: null
-energy_max: null
-dist_min: 0
-dist_max: 10
-draw_label_cutoff: 8.0
-draw_label_max_pairs: 10
-render_medoids_flat: true

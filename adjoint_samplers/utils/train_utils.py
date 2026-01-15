@@ -29,11 +29,10 @@ def setup(cfg):
     distributed_mode.init_distributed_mode(cfg)
 
     if distributed_mode.is_main_process():
-        args_filepath = Path("cfg.yaml")
-        print(f"Saving cfg to {args_filepath}")
-        with open("config.yaml", "w") as fout:
+        print(f"Saving cfg to {cfg.output_dir}")
+        with open(f"{cfg.output_dir}/config.yaml", "w") as fout:
             print(OmegaConf.to_yaml(cfg), file=fout)
-        with open("env.json", "w") as fout:
+        with open(f"{cfg.output_dir}/env.json", "w") as fout:
             print(json.dumps(dict(os.environ)), file=fout)
 
 

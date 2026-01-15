@@ -56,6 +56,7 @@ dependencies = [
     "bgflow @ git+https://github.com/atong01/bgflow",
     "scine-utilities",
     "scine-sparrow",
+    "tbb==2022.3.0",
 ]
 
 [tool.hatch.metadata]
