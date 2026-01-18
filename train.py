@@ -468,7 +468,7 @@ def main(cfg):
                             tag="rmsd",
                         )
 
-                        # Plot 2D projections
+                        # Plot 2D projections with HDBSCAN clusters
                         max_samples_proj = getattr(cfg, "max_samples_projection", 5000)
                         plot_2d_projection_rmsd(
                             cluster_samples,
@@ -476,71 +476,54 @@ def main(cfg):
                             eval_dir,
                             eval_dict,
                             cfg=cfg,
-                            tag="rmsd",
+                            tag="hdbscan",
                             cluster_labels=cluster_labels_rmsd,
                             n_samples_max=max_samples_proj,
                             rmsd_matrix=rmsd_matrix,
                         )
-                        
-                        # Cluster using density peaks algorithm
-                        if getattr(cfg, "cluster_by_density_peaks", False):
-                            cluster_centers_dp, cluster_labels_dp = cluster_rmsd_density_peaks(
-                                cluster_samples,
-                                energy,
-                                cfg,
-                                eval_dir,
-                                eval_dict,
-                                tag="rmsd_density_peaks",
-                                beta=beta_eval,
-                            )
-                            
-                            # Plot 2D projections with density peaks clusters
-                            plot_2d_projection_rmsd(
-                                cluster_samples,
-                                energy,
-                                eval_dir,
-                                eval_dict,
-                                cfg=cfg,
-                                tag="rmsd_density_peaks",
-                                cluster_labels=cluster_labels_dp,
-                                n_samples_max=max_samples_proj,
-                                rmsd_matrix=rmsd_matrix,
-                            )
-                            
-                            # Run frequency analysis on density peaks cluster centers
-                            run_frequency_analysis(
-                                cluster_centers_dp,
-                                cluster_samples,
-                                energy,
-                                eval_dict,
-                                tag="rmsd_density_peaks",
-                                beta=beta_eval,
-                            )
 
-                        # if getattr(cfg, "cluster_by_mbtr", False):
-                        #     medoid_indices_mbtr = cluster_mbtr(
-                        #         cluster_samples,
-                        #         energy,
-                        #         cfg,
-                        #         eval_dir,
-                        #         eval_dict,
-                        #         tag="mbtr",
-                        #     )
-                        #     run_frequency_analysis(
-                        #         medoid_indices_mbtr,
-                        #         cluster_samples,
-                        #         energy,
-                        #         eval_dict,
-                        #         tag="mbtr",
-                        #         beta=beta_eval,
-                        #     )
-
+                        # Run frequency analysis on HDBSCAN medoids
                         run_frequency_analysis(
                             medoid_indices_rmsd,
                             cluster_samples,
                             energy,
                             eval_dict,
-                            tag="rmsd",
+                            tag="hdbscan",
+                            beta=beta_eval,
+                        )
+
+                        # Cluster using density peaks algorithm (reuse RMSD matrix)
+                        cluster_centers_dp, cluster_labels_dp = cluster_rmsd_density_peaks(
+                            cluster_samples,
+                            energy,
+                            cfg,
+                            eval_dir,
+                            eval_dict,
+                            tag="density_peaks",
+                            beta=beta_eval,
+                            rmsd_matrix=rmsd_matrix,
+                        )
+
+                        # Plot 2D projections with density peaks clusters
+                        plot_2d_projection_rmsd(
+                            cluster_samples,
+                            energy,
+                            eval_dir,
+                            eval_dict,
+                            cfg=cfg,
+                            tag="density_peaks",
+                            cluster_labels=cluster_labels_dp,
+                            n_samples_max=max_samples_proj,
+                            rmsd_matrix=rmsd_matrix,
+                        )
+
+                        # Run frequency analysis on density peaks cluster centers
+                        run_frequency_analysis(
+                            cluster_centers_dp,
+                            cluster_samples,
+                            energy,
+                            eval_dict,
+                            tag="density_peaks",
                             beta=beta_eval,
                         )
 

@@ -325,9 +325,10 @@ def cluster_rmsd_hdbscan(samples, energy, cfg, eval_dir, eval_dict, rmsd_matrix=
     return medoid_indices_rmsd, labels_rmsd
 
 
-def cluster_rmsd_density_peaks(samples, energy, cfg, eval_dir, eval_dict, tag="rmsd_density_peaks", beta: float = 1.0):
+def cluster_rmsd_density_peaks(samples, energy, cfg, eval_dir, eval_dict, tag="density_peaks", beta: float = 1.0, rmsd_matrix=None):
     """Density Peaks clustering on unordered-aligned RMSD matrix; render cluster centers."""
-    rmsd_matrix = compute_rmsd_matrix(samples, energy, cfg, eval_dir, eval_dict, tag.replace("_density_peaks", ""))
+    if rmsd_matrix is None:
+        rmsd_matrix = compute_rmsd_matrix(samples, energy, cfg, eval_dir, eval_dict, tag)
     
     cluster_centers, labels = cluster_density_peaks(
         rmsd_matrix,

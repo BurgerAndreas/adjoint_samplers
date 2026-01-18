@@ -26,6 +26,13 @@ hdbscan:
   # min_samples: null  # optional, controls how conservative clustering is
   # cluster_selection_epsilon merges clusters within this RMSD distance (more conservative)
   cluster_selection_epsilon: 0.5
+density_peaks:
+  # distance cutoff for density computation (null = auto-select at 2nd percentile)
+  dc: null
+  # gamma threshold for cluster center selection (null = auto-select at mean + 2*std)
+  gamma_threshold: null
+  # maximum number of cluster centers
+  max_centers: 9
 rmsd_num_workers: 10
 
 # optional axis limits for plotting

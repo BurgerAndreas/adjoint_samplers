@@ -629,15 +629,20 @@ def run_frequency_analysis(medoid_indices, samples, energy, eval_dict, tag, beta
         else:
             freq_other += 1
     if freq_samples > 0:
-        prefix = f"{tag}_"
+        prefix = f"{tag}/"
         total = float(freq_samples)
         freq_minima_ratio = freq_minima / total
         freq_ts_ratio = freq_ts / total
         freq_other_ratio = freq_other / total
+        # Log absolute counts
+        eval_dict[f"{prefix}num_minima"] = freq_minima
+        eval_dict[f"{prefix}num_transition_states"] = freq_ts
+        eval_dict[f"{prefix}num_other"] = freq_other
+        eval_dict[f"{prefix}num_clusters"] = freq_samples
+        # Log ratios (for backwards compatibility and convenience)
         eval_dict[f"{prefix}freq_minima"] = freq_minima_ratio
         eval_dict[f"{prefix}freq_transition_states"] = freq_ts_ratio
         eval_dict[f"{prefix}freq_other"] = freq_other_ratio
-        eval_dict[f"{prefix}freq_total_samples"] = freq_samples
 
 
 def plot_energy_distance_hist(
