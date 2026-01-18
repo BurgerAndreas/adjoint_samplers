@@ -30,6 +30,7 @@ from adjoint_samplers.utils.eval_utils import (
     render_xyz_to_png,
     plot_energy_distance_hist,
     run_frequency_analysis,
+    evaluate_gt_matching,
 )
 from adjoint_samplers.utils.clustering import (
     plot_2d_projection_rmsd,
@@ -195,11 +196,16 @@ def main(cfg):
         np.random.seed(seed)
 
         # Load ground truth geometries if specified
-        gt_geometries = None
-        if cfg.gt_file is not None:
-            print(f"Loading ground truth geometries from {cfg.gt_file}...")
-            gt_geometries = load_gt_geometries_from_lmdb(cfg.gt_file, cfg.gt_key)
-            print(f"Loaded {len(gt_geometries)} ground truth geometries")
+        gt_minima = None
+        gt_ts = None
+        if getattr(cfg, "gt_minima_file", None) is not None:
+            print(f"Loading ground truth minima from {cfg.gt_minima_file}...")
+            gt_minima = load_gt_geometries_from_lmdb(cfg.gt_minima_file, cfg.gt_minima_keys)
+            print(f"Loaded {len(gt_minima)} ground truth minima entries")
+        if getattr(cfg, "gt_ts_file", None) is not None:
+            print(f"Loading ground truth transition states from {cfg.gt_ts_file}...")
+            gt_ts = load_gt_geometries_from_lmdb(cfg.gt_ts_file, cfg.gt_ts_key)
+            print(f"Loaded {len(gt_ts)} ground truth TS entries")
 
         print("Instantiating energy...")
         energy = hydra.utils.instantiate(cfg.energy, device=device)
@@ -525,6 +531,26 @@ def main(cfg):
                             eval_dict,
                             tag="density_peaks",
                             beta=beta_eval,
+                        )
+
+                    #####################
+                    # Evaluate against ground truth geometries
+                    #####################
+                    if gt_minima is not None:
+                        evaluate_gt_matching(
+                            samples,
+                            gt_minima,
+                            energy,
+                            eval_dict,
+                            tag="gt_minima",
+                        )
+                    if gt_ts is not None:
+                        evaluate_gt_matching(
+                            samples,
+                            gt_ts,
+                            energy,
+                            eval_dict,
+                            tag="gt_ts",
                         )
 
                     writer.log(eval_dict, step=epoch)

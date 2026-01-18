@@ -717,3 +717,107 @@ def plot_energy_distance_hist(
     return distances_full
 
 
+def compute_rmsd_to_gt(sample, gt_positions):
+    """
+    Compute RMSD between a sample and a ground truth geometry after optimal alignment.
+
+    Args:
+        sample: Tensor of shape (n_atoms, 3)
+        gt_positions: Tensor of shape (n_atoms, 3)
+
+    Returns:
+        RMSD value (float)
+    """
+    # Align sample to ground truth using Kabsch algorithm
+    R, t = find_rigid_alignment(sample, gt_positions)
+    aligned = (R @ sample.T).T + t
+    rmsd = torch.sqrt(((aligned - gt_positions) ** 2).sum(dim=1).mean())
+    return rmsd.item()
+
+
+def evaluate_gt_matching(
+    samples,
+    gt_geometries,
+    energy,
+    eval_dict,
+    tag="gt",
+):
+    """
+    Evaluate how well generated samples match ground truth geometries.
+
+    For each ground truth geometry, find the closest sample (by RMSD) and report:
+    - Min RMSD to each GT geometry
+    - Coverage: fraction of GT geometries matched within threshold
+
+    Args:
+        samples: Tensor of shape (n_samples, dim) - generated samples
+        gt_geometries: List of dicts with position tensors
+        energy: Energy object with n_particles and n_spatial_dim
+        eval_dict: Dict to store evaluation metrics
+        tag: Prefix for metric names
+    """
+    if len(gt_geometries) == 0:
+        print(f"No ground truth geometries for {tag}")
+        return
+
+    n_particles = energy.n_particles
+    n_spatial_dim = energy.n_spatial_dim
+
+    # Reshape samples to (n_samples, n_atoms, 3)
+    samples_reshaped = samples.view(-1, n_particles, n_spatial_dim)
+
+    # Extract positions from gt_geometries
+    gt_positions_list = []
+    for gt in gt_geometries:
+        # Get any position key from the geometry dict
+        for key in gt.keys():
+            if "positions" in key:
+                pos = gt[key]
+                if pos.dim() == 2 and pos.shape[0] == n_particles:
+                    gt_positions_list.append(pos.to(samples.device).float())
+
+    if len(gt_positions_list) == 0:
+        print(f"No valid position tensors found in ground truth for {tag}")
+        return
+
+    print(f"Evaluating {len(samples_reshaped)} samples against {len(gt_positions_list)} GT geometries ({tag})...")
+
+    # For each GT geometry, find the min RMSD to any sample
+    min_rmsds = []
+    matched_indices = []
+
+    for gt_idx, gt_pos in enumerate(gt_positions_list):
+        best_rmsd = float("inf")
+        best_sample_idx = -1
+
+        for sample_idx in range(len(samples_reshaped)):
+            sample = samples_reshaped[sample_idx]
+            rmsd = compute_rmsd_to_gt(sample, gt_pos)
+            if rmsd < best_rmsd:
+                best_rmsd = rmsd
+                best_sample_idx = sample_idx
+
+        min_rmsds.append(best_rmsd)
+        matched_indices.append(best_sample_idx)
+
+    min_rmsds = np.array(min_rmsds)
+
+    # Compute coverage at different thresholds
+    thresholds = [0.1, 0.25, 0.5, 1.0]
+    for thresh in thresholds:
+        coverage = (min_rmsds < thresh).mean()
+        eval_dict[f"{tag}/coverage_rmsd_{thresh}"] = coverage
+
+    # Log statistics
+    eval_dict[f"{tag}/min_rmsd_mean"] = float(min_rmsds.mean())
+    eval_dict[f"{tag}/min_rmsd_std"] = float(min_rmsds.std())
+    eval_dict[f"{tag}/min_rmsd_min"] = float(min_rmsds.min())
+    eval_dict[f"{tag}/min_rmsd_max"] = float(min_rmsds.max())
+    eval_dict[f"{tag}/num_gt"] = len(gt_positions_list)
+
+    # Log histogram
+    eval_dict[f"{tag}/min_rmsd_hist"] = wandb.Histogram(min_rmsds)
+
+    print(f"  {tag}: mean_rmsd={min_rmsds.mean():.4f}, coverage@0.5={eval_dict[f'{tag}/coverage_rmsd_0.5']:.2%}")
+
+

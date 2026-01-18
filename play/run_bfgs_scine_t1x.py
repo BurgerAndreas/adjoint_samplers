@@ -131,6 +131,75 @@ def main():
         txn_out.commit()
         print(f"\nSaved relaxed structures to {out_lmdb}")
 
+    # Check for duplicates
+    print("\n" + "=" * 60)
+    print("Checking for duplicate minima...")
+    print("=" * 60)
+
+    all_positions = []
+    all_labels = []
+
+    with lmdb.open(str(out_lmdb), readonly=True, subdir=False) as env:
+        with env.begin() as txn:
+            for key, value in txn.cursor():
+                item = pickle.loads(value)
+                rxn_id = item["rxn_id"]
+                all_positions.append(item["relaxed_reactant_positions"].numpy())
+                all_labels.append(f"{rxn_id}_reactant")
+                all_positions.append(item["relaxed_product_positions"].numpy())
+                all_labels.append(f"{rxn_id}_product")
+
+    n_structures = len(all_positions)
+    print(f"Total structures: {n_structures}")
+
+    # Compute RMSD matrix using Kabsch alignment
+    def compute_rmsd(pos1, pos2):
+        """Compute RMSD after optimal alignment."""
+        # Center both structures
+        pos1_c = pos1 - pos1.mean(axis=0)
+        pos2_c = pos2 - pos2.mean(axis=0)
+        # Kabsch algorithm
+        H = pos1_c.T @ pos2_c
+        U, S, Vt = np.linalg.svd(H)
+        R = Vt.T @ U.T
+        # Handle reflection
+        if np.linalg.det(R) < 0:
+            Vt[-1, :] *= -1
+            R = Vt.T @ U.T
+        pos1_aligned = pos1_c @ R
+        rmsd = np.sqrt(((pos1_aligned - pos2_c) ** 2).sum(axis=1).mean())
+        return rmsd
+
+    # Find duplicates
+    rmsd_threshold = 0.1  # Angstroms
+    duplicates = []
+    unique_indices = []
+    is_duplicate = [False] * n_structures
+
+    for i in range(n_structures):
+        if is_duplicate[i]:
+            continue
+        unique_indices.append(i)
+        for j in range(i + 1, n_structures):
+            if is_duplicate[j]:
+                continue
+            rmsd = compute_rmsd(all_positions[i], all_positions[j])
+            if rmsd < rmsd_threshold:
+                duplicates.append((i, j, rmsd))
+                is_duplicate[j] = True
+
+    print(f"\nUnique minima: {len(unique_indices)}")
+    print(f"Duplicate pairs (RMSD < {rmsd_threshold} Å): {len(duplicates)}")
+
+    if duplicates:
+        print("\nDuplicate pairs:")
+        for i, j, rmsd in duplicates:
+            print(f"  {all_labels[i]} <-> {all_labels[j]}: RMSD = {rmsd:.4f} Å")
+
+    print(f"\nUnique structures:")
+    for idx in unique_indices:
+        print(f"  {all_labels[idx]}")
+
 
 if __name__ == "__main__":
     main()
