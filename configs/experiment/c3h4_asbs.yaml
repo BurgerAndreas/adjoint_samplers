@@ -45,6 +45,7 @@ adjoint_matcher:
   optim:
     lr: 1e-4
     weight_decay: 0
+    eps: 1e-10
 
 corrector_matcher:
   buffer_size: 10000
@@ -54,6 +55,7 @@ corrector_matcher:
   optim:
     lr: 1e-4
     weight_decay: 0
+    eps: 1e-10
 
 
 # === eval & logging ===

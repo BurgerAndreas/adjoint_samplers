@@ -13,8 +13,13 @@ defaults:
 
 exp_name: isopropanol_asbs
 
-gt_file: null # path to ground truth geometry sample for evaluation
-gt_key: null # key to extract ground truth geometry from the file. can be a list of keys.
+# Ground truth geometries for evaluation
+gt_minima_file: data/t1x_isopropanol_C3H80_minima_scine_bfgs.lmdb
+gt_minima_keys:
+  - relaxed_reactant_positions
+  - relaxed_product_positions
+gt_ts_file: data/t1x_isopropanol_C3H80_ts_scine_sella.lmdb
+gt_ts_key: refined_ts_positions
 
 # === molecule configuration ===
 # isopropanol: C3H8O (12 atoms)
@@ -49,6 +54,7 @@ adjoint_matcher:
   optim:
     lr: 1e-4
     weight_decay: 0
+    eps: 1e-10
 
 corrector_matcher:
   buffer_size: 10000
@@ -58,6 +64,7 @@ corrector_matcher:
   optim:
     lr: 1e-4
     weight_decay: 0
+    eps: 1e-10
 
 # Reduce batch sizes for SCINE (much more expensive than toy energies)
 resample_batch_size: 64
