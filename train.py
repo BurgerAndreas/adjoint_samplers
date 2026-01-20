@@ -199,13 +199,21 @@ def main(cfg):
         gt_minima = None
         gt_ts = None
         if getattr(cfg, "gt_minima_file", None) is not None:
-            print(f"Loading ground truth minima from {cfg.gt_minima_file}...")
-            gt_minima = load_gt_geometries_from_lmdb(cfg.gt_minima_file, cfg.gt_minima_keys)
-            print(f"Loaded {len(gt_minima)} ground truth minima entries")
+            if os.path.exists(cfg.gt_minima_file):
+                print(f"Loading ground truth minima from {cfg.gt_minima_file}...")
+                gt_minima = load_gt_geometries_from_lmdb(cfg.gt_minima_file, cfg.gt_minima_keys)
+                print(f"Loaded {len(gt_minima)} ground truth minima entries")
+            else:
+                print(f"Warning: Ground truth minima file not found: {cfg.gt_minima_file}")
+                print("Continuing without ground truth minima data.")
         if getattr(cfg, "gt_ts_file", None) is not None:
-            print(f"Loading ground truth transition states from {cfg.gt_ts_file}...")
-            gt_ts = load_gt_geometries_from_lmdb(cfg.gt_ts_file, cfg.gt_ts_key)
-            print(f"Loaded {len(gt_ts)} ground truth TS entries")
+            if os.path.exists(cfg.gt_ts_file):
+                print(f"Loading ground truth transition states from {cfg.gt_ts_file}...")
+                gt_ts = load_gt_geometries_from_lmdb(cfg.gt_ts_file, cfg.gt_ts_key)
+                print(f"Loaded {len(gt_ts)} ground truth TS entries")
+            else:
+                print(f"Warning: Ground truth TS file not found: {cfg.gt_ts_file}")
+                print("Continuing without ground truth TS data.")
 
         print("Instantiating energy...")
         energy = hydra.utils.instantiate(cfg.energy, device=device)

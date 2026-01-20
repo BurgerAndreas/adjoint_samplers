@@ -177,6 +177,7 @@ cython_debug/
 core.*
 results/*
 data/*
+!data/*.lmdb
 wandb
 outputs
 

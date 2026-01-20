@@ -115,7 +115,7 @@ requires-dist = [
     { name = "scine-sparrow" },
     { name = "scine-utilities" },
     { name = "seaborn" },
-    { name = "sella" },
+    { name = "sella", editable = "external/sella" },
     { name = "submitit" },
     { name = "tbb", specifier = "==2022.3.0" },
     { name = "termcolor" },
@@ -3884,7 +3884,7 @@ wheels = [
 [[package]]
 name = "sella"
 version = "2.3.5"
-source = { registry = "https://pypi.org/simple" }
+source = { editable = "external/sella" }
 dependencies = [
     { name = "ase" },
     { name = "jax" },
@@ -3892,16 +3892,14 @@ dependencies = [
     { name = "numpy" },
     { name = "scipy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/69/ce/fd5c085bfe3674110dd445f7cd4aec39c6d69e1cda16533e69664eb56622/sella-2.3.5.tar.gz", hash = "sha256:2340eea946c936b24ed918713d5448f9ca76f5a4ea28be9aa6e11eb91b96c372", size = 519455, upload-time = "2024-10-15T05:39:17.979Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/88/64/241e5ff2b0bf46c41a2df1b883b07643acce7a276473fd345c1da0572815/Sella-2.3.5-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:6f60540769361253efa22a682194eb39334b2397a3802ac9111b0ba03b65e029", size = 307123, upload-time = "2024-10-15T05:38:57.014Z" },
-    { url = "https://files.pythonhosted.org/packages/42/d5/336e754cb03638ee9f70d1df3260eb0e0f01b7e15d3fd2d1b6676ad1e610/Sella-2.3.5-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:83b870a6c0e2a472df4c463909f0dd7be1d99c399c0ecf660782f69cc570ead2", size = 288962, upload-time = "2024-10-15T05:38:58.531Z" },
-    { url = "https://files.pythonhosted.org/packages/89/90/5ecb360bd54c95abb2219b5fc8ada57829cecbd9ba3107b17fc00a737da7/Sella-2.3.5-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7b4274d1a9adb95b3d0a87a0685271701a8e5f009219b8b240e3c576bc8dc90d", size = 1666947, upload-time = "2024-10-15T05:38:59.91Z" },
-    { url = "https://files.pythonhosted.org/packages/34/a1/47c5073cbac16e5b1369b6cd0bcd4405f7b5a162f7b3c57cababe0781778/Sella-2.3.5-cp311-cp311-win_amd64.whl", hash = "sha256:9f18f98364856b489e12ba66b0728a8900e3287ceb21383583535e5b0d799964", size = 277139, upload-time = "2024-10-15T05:39:01.427Z" },
-    { url = "https://files.pythonhosted.org/packages/16/cb/da2840bb17b1030439b21b6529520227aca562b7b8ae2f35f0e4793c72ea/Sella-2.3.5-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:ffab592c78599c503058f00f06d098825495f8d0d7045a411507d610b36f6ce6", size = 310181, upload-time = "2024-10-15T05:39:03.187Z" },
-    { url = "https://files.pythonhosted.org/packages/13/3c/12cbfbfd8e86a4e972cd621e92427f1369e1f08ea49e58f445643fb353ef/Sella-2.3.5-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:7a49dc578fd1dee733d4bf5fade2ab28d8fe238b9182e82e465964edd3a55507", size = 291519, upload-time = "2024-10-15T05:39:04.102Z" },
-    { url = "https://files.pythonhosted.org/packages/ce/18/43686d2ce60997cabf6dcdd216363fcdc11c6088ecd13232f9083243c4c5/Sella-2.3.5-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ae73450def90226be502c0fa902e368824f57bca6937189c72d34614962df5d5", size = 1638790, upload-time = "2024-10-15T05:39:05.634Z" },
-    { url = "https://files.pythonhosted.org/packages/bc/6a/71e51f8a208b4f9e0f54b11335d41a401d15e7b71cd166732ad479b6c531/Sella-2.3.5-cp312-cp312-win_amd64.whl", hash = "sha256:0a7ccdbe02306086d6ebfa58d8886d5ebd7b6c38969ffe12d42e8683cf75ed4f", size = 276170, upload-time = "2024-10-15T05:39:06.74Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "ase", specifier = ">=3.18.0" },
+    { name = "jax", specifier = ">=0.4.20" },
+    { name = "jaxlib", specifier = ">=0.4.20" },
+    { name = "numpy", specifier = ">=1.14.0" },
+    { name = "scipy", specifier = ">=1.1.0" },
 ]
 
 [[package]]

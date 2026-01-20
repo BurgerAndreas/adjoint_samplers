@@ -1,0 +1,3 @@
+[submodule "external/sella"]
+	path = external/sella
+	url = https://github.com/zadorlab/sella.git

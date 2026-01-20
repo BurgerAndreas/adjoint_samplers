@@ -66,6 +66,9 @@ allow-direct-references = true
 [tool.hatch.build.targets.wheel]
 packages = ["adjoint_samplers"]
 
+[tool.uv.sources]
+sella = { path = "./external/sella", editable = true }
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
